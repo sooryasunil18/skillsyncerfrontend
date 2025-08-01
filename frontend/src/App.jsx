@@ -1,0 +1,58 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import About from './pages/About';
+import Features from './pages/Features';
+import HowItWorks from './pages/HowItWorks';
+import Contact from './pages/Contact';
+import Auth from './pages/Auth';
+import JobseekerDashboard from './pages/JobseekerDashboard';
+import EmployerDashboard from './pages/EmployerDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import Footer from './components/Footer';
+
+// Layout component to conditionally render navbar and footer
+function Layout() {
+  const location = useLocation();
+
+  // Define routes that should NOT show the navbar and footer (dashboard routes)
+  const dashboardRoutes = [
+    '/jobseeker-dashboard',
+    '/employer-dashboard',
+    '/mentor-dashboard',
+    '/admin-dashboard'
+  ];
+  const isDashboardRoute = dashboardRoutes.includes(location.pathname);
+
+  return (
+    <div className="min-h-screen bg-white">
+      {!isDashboardRoute && <Navbar />}
+      <AnimatePresence mode="wait">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/features" element={<Features />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/jobseeker-dashboard" element={<JobseekerDashboard />} />
+          <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        </Routes>
+      </AnimatePresence>
+      {!isDashboardRoute && <Footer />}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Layout />
+    </Router>
+  );
+}
+
+export default App;
