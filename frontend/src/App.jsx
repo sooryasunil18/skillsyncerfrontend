@@ -10,7 +10,9 @@ import Contact from './pages/Contact';
 import Auth from './pages/Auth';
 import JobseekerDashboard from './pages/JobseekerDashboard';
 import EmployerDashboard from './pages/EmployerDashboard';
+import MentorDashboard from './pages/MentorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminLogin from './components/AdminLogin';
 import Footer from './components/Footer';
 
 // Layout component to conditionally render navbar and footer
@@ -22,7 +24,8 @@ function Layout() {
     '/jobseeker-dashboard',
     '/employer-dashboard',
     '/mentor-dashboard',
-    '/admin-dashboard'
+    '/admin-dashboard',
+    '/admin-login'
   ];
   const isDashboardRoute = dashboardRoutes.includes(location.pathname);
 
@@ -39,6 +42,8 @@ function Layout() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/jobseeker-dashboard" element={<JobseekerDashboard />} />
           <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+          <Route path="/mentor-dashboard" element={<MentorDashboard />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
         </Routes>
       </AnimatePresence>

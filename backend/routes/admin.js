@@ -139,6 +139,7 @@ router.get('/stats', [protect, adminAuth], async (req, res) => {
     const totalUsers = await User.countDocuments();
     const jobseekers = await User.countDocuments({ role: 'jobseeker' });
     const employers = await User.countDocuments({ role: 'employer' });
+    const mentors = await User.countDocuments({ role: 'mentor' });
     const activeUsers = await User.countDocuments({ isActive: true });
     const verifiedUsers = await User.countDocuments({ isEmailVerified: true });
     
@@ -163,6 +164,7 @@ router.get('/stats', [protect, adminAuth], async (req, res) => {
           totalUsers,
           jobseekers,
           employers,
+          mentors,
           activeUsers,
           verifiedUsers,
           recentRegistrations
@@ -237,6 +239,96 @@ router.delete('/users/:userId', [protect, adminAuth], async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting user',
+      error: error.message
+    });
+  }
+});
+
+// Add mentor
+router.post('/mentors', [protect, adminAuth], async (req, res) => {
+  try {
+    const { name, email, password, expertise, experience, bio, phone, location } = req.body;
+
+    // Validation
+    if (!name || !email || !password || !expertise) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide name, email, password, and expertise'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists with this email'
+      });
+    }
+
+    // Create mentor user
+    const mentor = await User.create({
+      name,
+      email,
+      password,
+      role: 'mentor',
+      profile: {
+        bio,
+        phone,
+        location,
+        expertise,
+        experience
+      },
+      isEmailVerified: true, // Admin-created mentors are pre-verified
+      isActive: true
+    });
+
+    // Calculate initial profile completion
+    mentor.calculateProfileCompletion();
+    await mentor.save();
+
+    // Remove password from response
+    const mentorResponse = await User.findById(mentor._id).select('-password');
+
+    res.status(201).json({
+      success: true,
+      message: 'Mentor added successfully',
+      data: {
+        mentor: mentorResponse
+      }
+    });
+
+  } catch (error) {
+    console.error('Error adding mentor:', error);
+    
+    // Handle duplicate email error
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mentor already exists with this email address'
+      });
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation Error',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error while adding mentor',
       error: error.message
     });
   }

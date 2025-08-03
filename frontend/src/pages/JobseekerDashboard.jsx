@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardApi } from '../utils/api';
+import EnhancedJobseekerProfile from '../components/EnhancedJobseekerProfile';
+import {
+  BasicInfoSection,
+  QualificationsSection,
+  JobPreferencesSection,
+  ProfilePreview
+} from '../components/ProfileFormSections';
 import {
   User,
   Settings,
@@ -29,7 +36,20 @@ import {
   Menu,
   X,
   Home,
-  UserCircle
+  UserCircle,
+  Plus,
+  Edit,
+  Save,
+  Upload,
+  Download,
+  Code,
+  Languages,
+  Shield,
+  DollarSign,
+  Globe,
+  Eye,
+  Loader,
+  AlertTriangle
 } from 'lucide-react';
 
 const JobseekerDashboard = () => {
@@ -52,6 +72,270 @@ const JobseekerDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [showEnhancedProfile, setShowEnhancedProfile] = useState(false);
+
+  // Profile form state
+  const [profileActiveSection, setProfileActiveSection] = useState('basic');
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null); // 'success', 'error', null
+  const [profileData, setProfileData] = useState({
+    // Basic Information
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+    resume: null,
+
+    // Education
+    education: [],
+
+    // Skills
+    skills: [],
+
+    // Work Experience
+    workExperience: [],
+
+    // Certifications
+    certifications: [],
+
+    // Job Preferences
+    jobTitles: [],
+    jobTypes: [],
+    workSchedule: [],
+    minimumBasePay: '',
+    relocationPreferences: [],
+    remotePreferences: '',
+
+    // Ready to work
+    readyToWork: false
+  });
+
+  const [newSkill, setNewSkill] = useState('');
+  const [newJobTitle, setNewJobTitle] = useState('');
+
+  // Profile form options
+  const jobTypeOptions = [
+    'Full-time',
+    'Part-time',
+    'Contract',
+    'Freelance',
+    'Internship',
+    'Temporary'
+  ];
+
+  const workScheduleOptions = [
+    'Day shift',
+    'Night shift',
+    'Morning shift',
+    'Evening shift',
+    'Rotational shift',
+    'Flexible hours'
+  ];
+
+  const remoteOptions = [
+    'Remote',
+    'Hybrid work',
+    'In-person'
+  ];
+
+  // Load last saved time from localStorage
+  useEffect(() => {
+    const savedTime = localStorage.getItem('profileLastSaved');
+    if (savedTime) {
+      setLastSaved(new Date(savedTime));
+    }
+  }, []);
+
+  // Track changes
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [profileData]);
+
+  // Profile form handlers
+  const handleInputChange = (field, value) => {
+    setProfileData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleArrayAdd = (field, value) => {
+    if (value.trim()) {
+      setProfileData(prev => ({
+        ...prev,
+        [field]: [...prev[field], value.trim()]
+      }));
+    }
+  };
+
+  const handleArrayRemove = (field, index) => {
+    setProfileData(prev => ({
+      ...prev,
+      [field]: prev[field].filter((_, i) => i !== index)
+    }));
+  };
+
+  const addEducation = () => {
+    setProfileData(prev => ({
+      ...prev,
+      education: [...prev.education, {
+        id: Date.now(),
+        degree: '',
+        institution: '',
+        year: '',
+        field: ''
+      }]
+    }));
+  };
+
+  const updateEducation = (id, field, value) => {
+    setProfileData(prev => ({
+      ...prev,
+      education: prev.education.map(edu =>
+        edu.id === id ? { ...edu, [field]: value } : edu
+      )
+    }));
+  };
+
+  const removeEducation = (id) => {
+    setProfileData(prev => ({
+      ...prev,
+      education: prev.education.filter(edu => edu.id !== id)
+    }));
+  };
+
+  const addWorkExperience = () => {
+    setProfileData(prev => ({
+      ...prev,
+      workExperience: [...prev.workExperience, {
+        id: Date.now(),
+        title: '',
+        company: '',
+        startDate: '',
+        endDate: '',
+        current: false,
+        description: ''
+      }]
+    }));
+  };
+
+  const updateWorkExperience = (id, field, value) => {
+    setProfileData(prev => ({
+      ...prev,
+      workExperience: prev.workExperience.map(exp =>
+        exp.id === id ? { ...exp, [field]: value } : exp
+      )
+    }));
+  };
+
+  const removeWorkExperience = (id) => {
+    setProfileData(prev => ({
+      ...prev,
+      workExperience: prev.workExperience.filter(exp => exp.id !== id)
+    }));
+  };
+
+  const addCertification = () => {
+    setProfileData(prev => ({
+      ...prev,
+      certifications: [...prev.certifications, {
+        id: Date.now(),
+        name: '',
+        issuer: '',
+        date: '',
+        expiryDate: '',
+        credentialId: ''
+      }]
+    }));
+  };
+
+  const updateCertification = (id, field, value) => {
+    setProfileData(prev => ({
+      ...prev,
+      certifications: prev.certifications.map(cert =>
+        cert.id === id ? { ...cert, [field]: value } : cert
+      )
+    }));
+  };
+
+  const removeCertification = (id) => {
+    setProfileData(prev => ({
+      ...prev,
+      certifications: prev.certifications.filter(cert => cert.id !== id)
+    }));
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    setSaveStatus(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch('/api/jobseeker/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: profileData.name,
+          profile: {
+            phone: profileData.phone,
+            location: profileData.location,
+            resume: profileData.resume,
+            education: profileData.education,
+            skills: profileData.skills,
+            workExperience: profileData.workExperience,
+            certifications: profileData.certifications,
+            jobTitles: profileData.jobTitles,
+            jobTypes: profileData.jobTypes,
+            workSchedule: profileData.workSchedule,
+            minimumBasePay: profileData.minimumBasePay,
+            relocationPreferences: profileData.relocationPreferences,
+            remotePreferences: profileData.remotePreferences,
+            readyToWork: profileData.readyToWork
+          }
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update user data with the response
+        setUser(result.data.user);
+        setDashboardData(prev => ({
+          ...prev,
+          profile: result.data.user
+        }));
+
+        const now = new Date();
+        setLastSaved(now);
+        localStorage.setItem('profileLastSaved', now.toISOString());
+        setHasUnsavedChanges(false);
+        setSaveStatus('success');
+
+        // Refresh dashboard data to get updated quick actions
+        fetchDashboardData();
+
+        setTimeout(() => setSaveStatus(null), 3000);
+      } else {
+        throw new Error(result.message || 'Failed to save profile');
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -77,6 +361,31 @@ const JobseekerDashboard = () => {
       if (result.success) {
         setDashboardData(result.data);
         setUser(result.data.profile);
+        
+        // Populate profile form with actual data
+        if (result.data.profile) {
+          setProfileData({
+            name: result.data.profile.name || '',
+            email: result.data.profile.email || '',
+            phone: result.data.profile.phone || '',
+            location: result.data.profile.location || '',
+            resume: result.data.profile.resume || null,
+            education: result.data.profile.education || [],
+            skills: result.data.profile.skills || [],
+            workExperience: result.data.profile.workExperience || [],
+            certifications: result.data.profile.certifications || [],
+            jobTitles: result.data.profile.jobTitles || [],
+            jobTypes: result.data.profile.jobTypes || [],
+            workSchedule: result.data.profile.workSchedule || [],
+            minimumBasePay: result.data.profile.minimumBasePay || '',
+            relocationPreferences: result.data.profile.relocationPreferences || [],
+            remotePreferences: result.data.profile.remotePreferences || '',
+            readyToWork: result.data.profile.readyToWork || false
+          });
+        }
+        
+        // Reset unsaved changes flag when loading fresh data
+        setHasUnsavedChanges(false);
       } else {
         setError(result.data?.message || 'Failed to load dashboard');
       }
@@ -165,336 +474,214 @@ const JobseekerDashboard = () => {
   const renderSectionContent = () => {
     switch (activeSection) {
       case 'profile':
+        const sectionTabs = [
+          { id: 'basic', name: 'Basic Info', icon: User },
+          { id: 'qualifications', name: 'Qualifications', icon: GraduationCap },
+          { id: 'preferences', name: 'Job Preferences', icon: Target },
+          { id: 'view', name: 'View Profile', icon: Eye }
+        ];
+
         return (
           <div className="space-y-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8"
+              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                <UserCircle className="w-6 h-6 mr-3 text-blue-600" />
-                Profile Management
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Personal Information */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-blue-600" />
-                    Personal Information
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Full Name *</label>
-                      <input 
-                        type="text" 
-                        value={user?.name || ''} 
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 bg-gray-50"
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Email *</label>
-                      <input 
-                        type="email" 
-                        value={user?.email || ''} 
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 bg-gray-50"
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                      <input 
-                        type="tel" 
-                        placeholder="+1 (555) 123-4567"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-                      <input 
-                        type="date" 
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Gender</label>
-                      <select className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
-                        <option value="">Select Gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer-not-to-say">Prefer not to say</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Professional Details */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4 flex items-center">
-                    <Briefcase className="w-5 h-5 mr-2 text-blue-600" />
-                    Professional Details
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Current Job Title</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g., Software Developer, Marketing Manager"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Experience Level</label>
-                      <select className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
-                        <option value="">Select Experience</option>
-                        <option value="entry">Entry Level (0-1 years)</option>
-                        <option value="junior">Junior (1-3 years)</option>
-                        <option value="mid">Mid Level (3-5 years)</option>
-                        <option value="senior">Senior (5-8 years)</option>
-                        <option value="lead">Lead (8+ years)</option>
-                        <option value="executive">Executive (10+ years)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Industry</label>
-                      <select className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
-                        <option value="">Select Industry</option>
-                        <option value="technology">Technology</option>
-                        <option value="healthcare">Healthcare</option>
-                        <option value="finance">Finance</option>
-                        <option value="education">Education</option>
-                        <option value="retail">Retail</option>
-                        <option value="manufacturing">Manufacturing</option>
-                        <option value="consulting">Consulting</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Salary Expectation</label>
-                      <div className="flex space-x-2">
-                        <select className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
-                          <option value="USD">USD</option>
-                          <option value="EUR">EUR</option>
-                          <option value="GBP">GBP</option>
-                        </select>
-                        <input 
-                          type="number" 
-                          placeholder="50000"
-                          className="flex-2 rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Preferred Work Type</label>
-                      <div className="mt-2 space-y-2">
-                        <label className="flex items-center">
-                          <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span className="ml-2 text-sm text-gray-700">Full-time</span>
-                        </label>
-                        <label className="flex items-center">
-                          <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span className="ml-2 text-sm text-gray-700">Part-time</span>
-                        </label>
-                        <label className="flex items-center">
-                          <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span className="ml-2 text-sm text-gray-700">Contract</span>
-                        </label>
-                        <label className="flex items-center">
-                          <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span className="ml-2 text-sm text-gray-700">Remote</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Location & Contact */}
-              <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4 flex items-center">
-                    <MapPin className="w-5 h-5 mr-2 text-blue-600" />
-                    Location & Contact
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Country</label>
-                      <select className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
-                        <option value="">Select Country</option>
-                        <option value="US">United States</option>
-                        <option value="CA">Canada</option>
-                        <option value="UK">United Kingdom</option>
-                        <option value="AU">Australia</option>
-                        <option value="DE">Germany</option>
-                        <option value="FR">France</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">City</label>
-                      <input 
-                        type="text" 
-                        placeholder="Enter your city"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">LinkedIn Profile</label>
-                      <input 
-                        type="url" 
-                        placeholder="https://linkedin.com/in/yourprofile"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Portfolio/Website</label>
-                      <input 
-                        type="url" 
-                        placeholder="https://yourportfolio.com"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Skills & Education */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4 flex items-center">
-                    <GraduationCap className="w-5 h-5 mr-2 text-blue-600" />
-                    Skills & Education
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Skills</label>
-                      <textarea 
-                        rows="3"
-                        placeholder="Enter your skills separated by commas (e.g., JavaScript, React, Node.js, Python)"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      ></textarea>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Highest Education</label>
-                      <select className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
-                        <option value="">Select Education Level</option>
-                        <option value="high-school">High School</option>
-                        <option value="associate">Associate Degree</option>
-                        <option value="bachelor">Bachelor's Degree</option>
-                        <option value="master">Master's Degree</option>
-                        <option value="phd">PhD</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Field of Study</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g., Computer Science, Business Administration"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Languages</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g., English (Native), Spanish (Fluent), French (Basic)"
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Resume Upload & Bio */}
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold mb-4 flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-blue-600" />
-                  Resume & Bio
-                </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
+                <div className="flex items-center justify-between">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Upload Resume</label>
-                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-blue-400 transition-colors duration-200">
-                      <div className="space-y-1 text-center">
-                        <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                        <div className="flex text-sm text-gray-600">
-                          <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                            <span>Upload a file</span>
-                            <input type="file" className="sr-only" accept=".pdf,.doc,.docx" />
-                          </label>
-                          <p className="pl-1">or drag and drop</p>
+                    <h2 className="text-2xl font-bold">
+                      {isPreviewMode ? 'Profile Preview' : 'Complete Your Profile'}
+                    </h2>
+                    <div className="flex items-center space-x-4 mt-2">
+                      <p className="text-blue-100">
+                        {isPreviewMode ? 'Review your profile information' : 'Help employers find you with a complete profile'}
+                      </p>
+                      {lastSaved && (
+                        <div className="flex items-center space-x-1 text-blue-100 text-sm">
+                          <Clock className="w-4 h-4" />
+                          <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
                         </div>
-                        <p className="text-xs text-gray-500">PDF, DOC, DOCX up to 10MB</p>
-                      </div>
+                      )}
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Professional Bio</label>
-                    <textarea 
-                      rows="6"
-                      placeholder="Write a brief professional summary about yourself, your experience, and career goals..."
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    ></textarea>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setIsPreviewMode(!isPreviewMode)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                    >
+                      {isPreviewMode ? <Edit className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <span>{isPreviewMode ? 'Edit' : 'Preview'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
-              
-              {/* Action Buttons */}
-              <div className="mt-8 border-t border-gray-200 pt-6">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <motion.button
-                    whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(59,130,246,0.3)" }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 px-8 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-                  >
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Save & Update Profile
-                  </motion.button>
-                  
-                  <motion.button
-                    whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-4 px-8 rounded-xl font-semibold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all duration-300 flex items-center justify-center"
-                  >
-                    <FileText className="w-5 h-5 mr-2" />
-                    Preview Profile
-                  </motion.button>
-                  
-                  <motion.button
-                    whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(34,197,94,0.2)" }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-8 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-                  >
-                    <Award className="w-5 h-5 mr-2" />
-                    Complete Profile
-                  </motion.button>
+
+              {/* Navigation Tabs - Only show in edit mode */}
+              {!isPreviewMode && (
+                <div className="border-b border-gray-200 bg-gray-50">
+                  <div className="flex space-x-0">
+                    {sectionTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setProfileActiveSection(tab.id)}
+                        className={`flex-1 flex items-center justify-center space-x-2 py-4 px-6 font-medium transition-colors ${
+                          profileActiveSection === tab.id
+                            ? 'bg-white text-blue-600 border-b-2 border-blue-600'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                      >
+                        <tab.icon className="w-5 h-5" />
+                        <span>{tab.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                
-                {/* Profile Completion Status */}
-                <div className="mt-6 bg-gray-50 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Profile Completion</span>
-                    <span className="text-sm font-semibold text-blue-600">75%</span>
+              )}
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <AnimatePresence mode="wait">
+                  {isPreviewMode ? (
+                    <ProfilePreview
+                      profileData={profileData}
+                      onEdit={(section) => {
+                        setIsPreviewMode(false);
+                        setProfileActiveSection(section);
+                      }}
+                    />
+                  ) : (
+                    <>
+                      {profileActiveSection === 'basic' && (
+                        <BasicInfoSection
+                          profileData={profileData}
+                          handleInputChange={handleInputChange}
+                        />
+                      )}
+
+                      {profileActiveSection === 'qualifications' && (
+                        <QualificationsSection
+                          profileData={profileData}
+                          newSkill={newSkill}
+                          setNewSkill={setNewSkill}
+                          handleArrayAdd={handleArrayAdd}
+                          handleArrayRemove={handleArrayRemove}
+                          addEducation={addEducation}
+                          updateEducation={updateEducation}
+                          removeEducation={removeEducation}
+                          addWorkExperience={addWorkExperience}
+                          updateWorkExperience={updateWorkExperience}
+                          removeWorkExperience={removeWorkExperience}
+                          addCertification={addCertification}
+                          updateCertification={updateCertification}
+                          removeCertification={removeCertification}
+                        />
+                      )}
+
+                      {profileActiveSection === 'preferences' && (
+                        <JobPreferencesSection
+                          profileData={profileData}
+                          newJobTitle={newJobTitle}
+                          setNewJobTitle={setNewJobTitle}
+                          handleArrayAdd={handleArrayAdd}
+                          handleArrayRemove={handleArrayRemove}
+                          handleInputChange={handleInputChange}
+                          jobTypeOptions={jobTypeOptions}
+                          workScheduleOptions={workScheduleOptions}
+                          remoteOptions={remoteOptions}
+                        />
+                      )}
+
+                      {profileActiveSection === 'view' && (
+                        <ProfilePreview
+                          profileData={profileData}
+                          onEdit={null}
+                        />
+                      )}
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-gray-200 p-6 bg-gray-50 rounded-b-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    {/* Ready to work checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="ready-to-work"
+                        checked={profileData.readyToWork}
+                        onChange={(e) => handleInputChange('readyToWork', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="ready-to-work" className="text-sm font-medium text-gray-700">
+                        I'm ready to work immediately
+                      </label>
+                    </div>
+
+                    {/* Unsaved changes indicator */}
+                    {hasUnsavedChanges && (
+                      <div className="flex items-center space-x-1 text-amber-600 text-sm">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Unsaved changes</span>
+                      </div>
+                    )}
+
+                    {/* Save status */}
+                    {saveStatus === 'success' && (
+                      <div className="flex items-center space-x-1 text-green-600 text-sm">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Profile saved successfully!</span>
+                      </div>
+                    )}
+
+                    {saveStatus === 'error' && (
+                      <div className="flex items-center space-x-1 text-red-600 text-sm">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Error saving profile. Please try again.</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <motion.div 
-                      initial={{ width: "0%" }}
-                      animate={{ width: "75%" }}
-                      transition={{ duration: 1, ease: "easeOut" }}
-                      className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-600"
-                    ></motion.div>
+
+                  <div className="flex items-center space-x-3">
+                    {!isPreviewMode && (
+                      <button
+                        onClick={() => setIsPreviewMode(true)}
+                        className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Preview</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={isSaving}
+                      className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                        isSaving
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {isSaving ? (
+                        <Loader className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>{isSaving ? 'Saving...' : 'Update Profile'}</span>
+                    </button>
                   </div>
-                  <p className="text-xs text-gray-600 mt-2">
-                    Complete your profile to increase visibility to employers by up to 40%
-                  </p>
                 </div>
               </div>
             </motion.div>
           </div>
         );
-      
+
       case 'jobs':
         return (
           <div className="space-y-8">
@@ -904,9 +1091,14 @@ const JobseekerDashboard = () => {
                     <p className="text-sm text-gray-600 truncate">{user?.email || localStorage.getItem('userEmail') || 'user@example.com'}</p>
                     <div className="flex items-center mt-1">
                       <div className="h-1.5 w-16 bg-gray-200 rounded-full mr-2">
-                        <div className="h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full" style={{width: '75%'}}></div>
+                        <div 
+                          className="h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500" 
+                          style={{width: `${dashboardData?.profile?.completionPercentage || 0}%`}}
+                        ></div>
                       </div>
-                      <span className="text-xs text-gray-500">75% Complete</span>
+                      <span className="text-xs text-gray-500">
+                        {dashboardData?.profile?.completionPercentage || 0}% Complete
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1006,9 +1198,14 @@ const JobseekerDashboard = () => {
               <p className="text-sm text-gray-600 truncate">{user?.email || localStorage.getItem('userEmail') || 'user@example.com'}</p>
               <div className="flex items-center mt-1">
                 <div className="h-1.5 w-16 bg-gray-200 rounded-full mr-2">
-                  <div className="h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full" style={{width: '75%'}}></div>
+                  <div 
+                    className={`h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500`}
+                    style={{width: `${dashboardData?.profile?.completionPercentage || 0}%`}}
+                  ></div>
                 </div>
-                <span className="text-xs text-gray-500">75% Complete</span>
+                <span className="text-xs text-gray-500">
+                  {dashboardData?.profile?.completionPercentage || 0}% Complete
+                </span>
               </div>
             </div>
           </div>
@@ -1135,6 +1332,7 @@ const JobseekerDashboard = () => {
               <motion.button
                 whileHover={{ scale: 1.05, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
                 whileTap={{ scale: 0.95 }}
+                onClick={() => setShowEnhancedProfile(true)}
                 className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white px-6 py-3 rounded-xl font-medium shadow-lg transition-all duration-200"
               >
                 Complete Now
@@ -1383,40 +1581,77 @@ const JobseekerDashboard = () => {
                 </h2>
               </div>
               <div className="p-6 space-y-4">
-                <motion.button
-                  whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Edit Profile
-                </motion.button>
+                {/* Dynamic Quick Actions based on profile completion */}
+                {dashboardData?.quickActions?.length > 0 ? (
+                  dashboardData.quickActions.map((action, index) => {
+                    const getActionIcon = (iconName) => {
+                      const icons = {
+                        'user': User,
+                        'code': Code,
+                        'file-text': FileText,
+                        'map-pin': MapPin,
+                        'phone': Phone,
+                        'briefcase': Briefcase,
+                        'camera': User, // fallback
+                        'link': Globe,
+                        'settings': Settings,
+                        'award': Award
+                      };
+                      return icons[iconName] || User;
+                    };
+
+                    const ActionIcon = getActionIcon(action.icon);
+                    const priorityColors = {
+                      high: 'from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600',
+                      medium: 'from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700',
+                      low: 'from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700'
+                    };
+
+                    return (
+                      <motion.button
+                        key={action.id}
+                        whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setActiveSection('profile')}
+                        className={`w-full bg-gradient-to-r ${priorityColors[action.priority]} text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg`}
+                      >
+                        <ActionIcon className="w-4 h-4 mr-2" />
+                        {action.title}
+                      </motion.button>
+                    );
+                  })
+                ) : (
+                  <>
+                    <motion.button
+                      whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setActiveSection('profile')}
+                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Complete Profile
+                    </motion.button>
+                    
+                    <motion.button
+                      whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setActiveSection('jobs')}
+                      className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
+                    >
+                      <Search className="w-4 h-4 mr-2" />
+                      Find Jobs
+                    </motion.button>
+                  </>
+                )}
                 
                 <motion.button
                   whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Find Jobs
-                </motion.button>
-                
-                <motion.button
-                  whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setActiveSection('applications')}
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
                 >
                   <BarChart3 className="w-4 h-4 mr-2" />
-                  View Analytics
-                </motion.button>
-                
-                <motion.button
-                  whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
-                >
-                  <Users className="w-4 h-4 mr-2" />
-                  Network
+                  View Applications
                 </motion.button>
               </div>
             </motion.div>
@@ -1503,6 +1738,14 @@ const JobseekerDashboard = () => {
           renderSectionContent()
         )}
       </div>
+
+      {/* Enhanced Profile Modal */}
+      {showEnhancedProfile && (
+        <EnhancedJobseekerProfile
+          onClose={() => setShowEnhancedProfile(false)}
+          initialData={dashboardData?.profile || {}}
+        />
+      )}
     </div>
   );
 };

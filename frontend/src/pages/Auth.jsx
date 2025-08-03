@@ -230,6 +230,8 @@ const Auth = () => {
             navigate('/jobseeker-dashboard');
           } else if (data.data.user.role === 'employer' || data.data.user.role === 'company') {
             navigate('/employer-dashboard');
+          } else if (data.data.user.role === 'mentor') {
+            navigate('/mentor-dashboard');
           } else if (data.data.user.role === 'admin') {
             navigate('/admin-dashboard');
           } else {

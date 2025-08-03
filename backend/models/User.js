@@ -29,11 +29,11 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['jobseeker', 'employer', 'admin'],
+    enum: ['jobseeker', 'employer', 'mentor', 'admin'],
     default: 'jobseeker',
     required: true
   },
-  // Jobseeker specific fields
+  // Jobseeker and Mentor specific fields
   profile: {
     bio: {
       type: String,
@@ -61,6 +61,11 @@ const userSchema = new mongoose.Schema({
     },
     portfolio: {
       type: String, // URL to portfolio
+    },
+    // Mentor specific fields
+    expertise: {
+      type: String,
+      trim: true
     }
   },
   // Employer specific fields
@@ -137,7 +142,13 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 // Calculate profile completion
 userSchema.methods.calculateProfileCompletion = function() {
   let completion = 0;
-  const totalFields = this.role === 'jobseeker' ? 8 : 6;
+  let totalFields = 6; // Default for employer
+  
+  if (this.role === 'jobseeker') {
+    totalFields = 8;
+  } else if (this.role === 'mentor') {
+    totalFields = 7;
+  }
   
   // Basic fields (common for all)
   if (this.name) completion++;
@@ -150,6 +161,12 @@ userSchema.methods.calculateProfileCompletion = function() {
     if (this.profile.location) completion++;
     if (this.profile.phone) completion++;
     if (this.profile.resume) completion++;
+  } else if (this.role === 'mentor') {
+    if (this.profile.bio) completion++;
+    if (this.profile.expertise) completion++;
+    if (this.profile.experience) completion++;
+    if (this.profile.location) completion++;
+    if (this.profile.phone) completion++;
   } else if (this.role === 'employer') {
     if (this.company.name) completion++;
     if (this.company.description) completion++;

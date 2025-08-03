@@ -1,147 +1,293 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
+  User,
   Building,
   Briefcase,
-  TrendingUp,
   Settings,
   LogOut,
+  BarChart3,
+  PieChart,
+  Activity,
   Search,
   Filter,
-  MoreVertical,
   Eye,
   Edit,
   Trash2,
   UserCheck,
   UserX,
-  Shield,
-  Bell,
+  RefreshCw,
+  Download,
+  ChevronLeft,
+  ChevronRight,
   Calendar,
-  BarChart3,
-  PieChart,
-  Activity,
-  Globe,
   Mail,
   Phone,
   MapPin,
-  Star,
+  Shield,
+  AlertCircle,
   CheckCircle,
-  XCircle,
   Clock,
-  ArrowUp,
-  ArrowDown,
-  Plus,
-  Download,
-  Upload,
-  RefreshCw
+  TrendingUp,
+  TrendingDown,
+  Bell,
+  Menu,
+  X,
+  Home,
+  Star,
+  Award,
+  Target,
+  Zap,
+  Globe,
+  DollarSign,
+  GraduationCap,
+  Plus
 } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [activeSection, setActiveSection] = useState('overview');
-  const [users, setUsers] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [jobs, setJobs] = useState([]);
-  const [stats, setStats] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterIndustry, setFilterIndustry] = useState('all');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [recentUsers, setRecentUsers] = useState([]);
+  const [recentUsersLoading, setRecentUsersLoading] = useState(false);
+  const [companies, setCompanies] = useState([]);
+  const [mentors, setMentors] = useState([]);
+  const [stats, setStats] = useState({});
+  const [pagination, setPagination] = useState({});
+  const [filters, setFilters] = useState({
+    role: '',
+    status: '',
+    search: ''
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [notifications, setNotifications] = useState(3);
+  const [showMentorForm, setShowMentorForm] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [mentorFormData, setMentorFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    expertise: '',
+    experience: '',
+    bio: '',
+    phone: '',
+    location: ''
+  });
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Check if user is admin
-    const userRole = localStorage.getItem('userRole');
-    if (userRole !== 'admin') {
-      navigate('/auth');
-      return;
+  // API Functions
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5001/api/admin/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setStats(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
+  };
 
-    // Fetch admin data
-    fetchDashboardData();
-
-    // Update time every second
-    const timeInterval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timeInterval);
-  }, [navigate]);
-
-  const fetchDashboardData = async () => {
+  const fetchUsers = async (page = 1) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        ...(filters.role && { role: filters.role }),
+        ...(filters.status && { status: filters.status })
+      });
 
-      if (!token) {
-        navigate('/auth');
-        return;
-      }
-
-      // Fetch users
-      const usersResponse = await fetch('http://localhost:5001/api/admin/users', {
+      const response = await fetch(`http://localhost:5001/api/admin/users?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
-        setUsers(usersData.data.users.map(user => ({
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          status: user.isActive ? 'active' : 'inactive',
-          joinDate: new Date(user.createdAt).toLocaleDateString()
-        })));
+      const data = await response.json();
+      if (data.success) {
+        setUsers(data.data.users);
+        setPagination(data.data.pagination);
       }
-
-      // Fetch companies
-      const companiesResponse = await fetch('http://localhost:5001/api/admin/companies', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (companiesResponse.ok) {
-        const companiesData = await companiesResponse.json();
-        setCompanies(companiesData.data.companies);
-      }
-
-      // Fetch statistics
-      const statsResponse = await fetch('http://localhost:5001/api/admin/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData.data);
-      }
-
-      // Mock jobs data for now
-      setJobs([
-        { id: 1, title: 'Software Engineer', company: 'TechCorp Inc', applications: 25, status: 'active', posted: '2024-01-25', salary: '$80,000 - $120,000' },
-        { id: 2, title: 'Product Manager', company: 'TechCorp Inc', applications: 15, status: 'active', posted: '2024-01-28', salary: '$90,000 - $130,000' },
-        { id: 3, title: 'UX Designer', company: 'HealthPlus Medical', applications: 18, status: 'active', posted: '2024-01-30', salary: '$70,000 - $100,000' },
-        { id: 4, title: 'Data Scientist', company: 'EduTech Solutions', applications: 32, status: 'active', posted: '2024-02-01', salary: '$95,000 - $140,000' }
-      ]);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      if (error.message.includes('401') || error.message.includes('403')) {
-        navigate('/auth');
-      }
+      console.error('Error fetching users:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchRecentUsers = async () => {
+    try {
+      setRecentUsersLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5001/api/admin/users?page=1&limit=5&sortBy=createdAt&sortOrder=desc', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setRecentUsers(data.data.users);
+      }
+    } catch (error) {
+      console.error('Error fetching recent users:', error);
+    } finally {
+      setRecentUsersLoading(false);
+    }
+  };
+
+  const fetchCompanies = async (page = 1) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10'
+      });
+
+      const response = await fetch(`http://localhost:5001/api/admin/companies?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCompanies(data.data.companies);
+        setPagination(data.data.pagination);
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMentors = async (page = 1) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        role: 'mentor'
+      });
+
+      const response = await fetch(`http://localhost:5001/api/admin/users?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMentors(data.data.users);
+        setPagination(data.data.pagination);
+      }
+    } catch (error) {
+      console.error('Error fetching mentors:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addMentor = async (mentorData) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5001/api/admin/mentors', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(mentorData)
+      });
+      const data = await response.json();
+      if (data.success) {
+        setShowMentorForm(false);
+        setMentorFormData({
+          name: '',
+          email: '',
+          password: '',
+          expertise: '',
+          experience: '',
+          bio: '',
+          phone: '',
+          location: ''
+        });
+        fetchMentors(currentPage);
+        
+        // Show custom success popup
+        setSuccessMessage('Mentor added successfully! Username & password will be mailed shortly.');
+        setShowSuccessPopup(true);
+      } else {
+        alert(data.message || 'Error adding mentor');
+      }
+    } catch (error) {
+      console.error('Error adding mentor:', error);
+      alert('Error adding mentor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateUserStatus = async (userId, isActive) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5001/api/admin/users/${userId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ isActive })
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchUsers(currentPage);
+        if (activeSection === 'mentors') {
+          fetchMentors(currentPage);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating user status:', error);
+    }
+  };
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch data on component mount and section change
+  useEffect(() => {
+    fetchStats();
+    fetchRecentUsers(); // Always fetch recent users for dashboard
+    if (activeSection === 'users') {
+      fetchUsers(currentPage);
+    } else if (activeSection === 'companies') {
+      fetchCompanies(currentPage);
+    } else if (activeSection === 'mentors') {
+      fetchMentors(currentPage);
+    }
+  }, [activeSection, currentPage, filters]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -151,889 +297,1707 @@ const AdminDashboard = () => {
     navigate('/auth');
   };
 
-  const sidebarItems = [
-    { id: 'overview', name: 'Dashboard', icon: BarChart3, badge: null },
-    { id: 'users', name: 'Users', icon: Users, badge: users.length },
-    { id: 'companies', name: 'Companies', icon: Building, badge: companies.length },
-    { id: 'jobs', name: 'Jobs', icon: Briefcase, badge: jobs.length },
-    { id: 'analytics', name: 'Analytics', icon: PieChart, badge: null },
-    { id: 'settings', name: 'Settings', icon: Settings, badge: null }
-  ];
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
 
-  const dashboardStats = [
-    {
-      title: 'Total Users',
-      value: stats.overview?.totalUsers || users.length,
-      icon: Users,
-      color: 'from-blue-500 to-blue-600',
-      change: '+12%',
-      changeType: 'increase',
-      description: 'Active platform users'
-    },
-    {
-      title: 'Active Companies',
-      value: stats.overview?.employers || companies.filter(c => c.status === 'active').length,
-      icon: Building,
-      color: 'from-green-500 to-green-600',
-      change: '+8%',
-      changeType: 'increase',
-      description: 'Verified employers'
-    },
-    {
-      title: 'Job Postings',
-      value: jobs.length,
-      icon: Briefcase,
-      color: 'from-purple-500 to-purple-600',
-      change: '+15%',
-      changeType: 'increase',
-      description: 'Active job listings'
-    },
-    {
-      title: 'Total Applications',
-      value: jobs.reduce((sum, job) => sum + job.applications, 0),
-      icon: TrendingUp,
-      color: 'from-orange-500 to-orange-600',
-      change: '+23%',
-      changeType: 'increase',
-      description: 'Job applications received'
+  const handleMentorFormChange = (key, value) => {
+    setMentorFormData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleMentorFormSubmit = (e) => {
+    e.preventDefault();
+    if (!mentorFormData.name || !mentorFormData.email || !mentorFormData.password || !mentorFormData.expertise) {
+      alert('Please fill in all required fields');
+      return;
     }
+    addMentor(mentorFormData);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const sidebarItems = [
+    { id: 'overview', name: 'Overview', icon: Home, color: 'from-blue-500 to-blue-600' },
+    { id: 'users', name: 'Users', icon: Users, color: 'from-green-500 to-green-600' },
+    { id: 'companies', name: 'Companies', icon: Building, color: 'from-purple-500 to-purple-600' },
+    { id: 'mentors', name: 'Mentors', icon: GraduationCap, color: 'from-indigo-500 to-indigo-600' },
+    { id: 'jobs', name: 'Jobs', icon: Briefcase, color: 'from-orange-500 to-orange-600' },
+    { id: 'analytics', name: 'Analytics', icon: BarChart3, color: 'from-pink-500 to-pink-600' },
+    { id: 'settings', name: 'Settings', icon: Settings, color: 'from-gray-500 to-gray-600' }
   ];
-
-  // Filter functions
-  const filteredCompanies = companies.filter(company => {
-    const matchesSearch = company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         company.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || company.status === filterStatus;
-    const matchesIndustry = filterIndustry === 'all' || company.industry === filterIndustry;
-    return matchesSearch && matchesStatus && matchesIndustry;
-  });
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || user.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <div className="relative">
-            <div className="animate-spin rounded-full h-32 w-32 border-4 border-gray-200 border-t-blue-600 mx-auto"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Shield className="h-8 w-8 text-blue-600" />
-            </div>
-          </div>
-          <p className="mt-4 text-gray-600 font-medium">Loading Admin Dashboard...</p>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200">
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <motion.div
+      <motion.div 
         initial={{ x: -300 }}
         animate={{ x: 0 }}
-        className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 border-r border-gray-200"
+        className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white shadow-lg relative transition-all duration-300 border-r border-gray-200`}
       >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="relative h-24 px-6 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 overflow-hidden">
-            <div className="absolute inset-0 bg-black opacity-10"></div>
-            <div className="relative flex items-center justify-center h-full">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2 }}
-                className="flex items-center space-x-3"
-              >
-                <div className="p-2 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
-                  <Shield className="h-8 w-8 text-white" />
-                </div>
-                <div>
-                  <span className="text-2xl font-bold text-white">SkillSyncer</span>
-                  <p className="text-sm text-blue-100 font-medium">Admin Dashboard</p>
-                </div>
-              </motion.div>
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-200/50">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+              <Zap className="w-6 h-6 text-white" />
             </div>
-          </div>
-
-          {/* Admin Info */}
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">SS</span>
-              </div>
+            {!sidebarCollapsed && (
               <div>
-                <p className="font-semibold text-gray-900">Soorya Sunil</p>
-                <p className="text-xs text-gray-500">Super Administrator</p>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  SkillSyncer
+                </h1>
+                <p className="text-xs text-gray-500 font-medium">Admin Portal</p>
               </div>
-            </div>
-            <div className="mt-3 text-xs text-gray-500">
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>{currentTime.toLocaleTimeString()}</span>
-              </div>
-            </div>
+            )}
           </div>
+        </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1">
-            {sidebarItems.map((item, index) => (
+        {/* Toggle Button */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute -right-3 top-20 w-6 h-6 bg-white rounded-full shadow-lg border border-gray-200 flex items-center justify-center hover:shadow-xl transition-all duration-200"
+        >
+          {sidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+        </button>
+
+        {/* Admin Profile */}
+        <div className="p-4 border-b border-gray-200/50">
+          <div className="flex items-center space-x-3">
+            <div className="relative">
+              <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+            </div>
+            {!sidebarCollapsed && (
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800">{localStorage.getItem('userName') || 'Admin User'}</p>
+                <p className="text-xs text-gray-500">{currentTime.toLocaleTimeString()}</p>
+                <div className="flex items-center space-x-1 mt-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-green-600 font-medium">Online</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="p-4 flex-1 space-y-2">
+          {sidebarItems.map((item, index) => {
+            const Icon = item.icon;
+            const isActive = activeSection === item.id;
+            return (
               <motion.button
                 key={item.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-all duration-300 group ${
-                  activeSection === item.id
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 hover:transform hover:scale-102'
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group relative overflow-hidden ${
+                  isActive
+                    ? `bg-gradient-to-r ${item.color} text-white shadow-lg transform scale-105`
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                <div className="flex items-center space-x-3">
-                  <item.icon className={`w-5 h-5 transition-transform duration-300 ${
-                    activeSection === item.id ? 'scale-110' : 'group-hover:scale-110'
-                  }`} />
-                  <span className="font-medium">{item.name}</span>
-                </div>
-                {item.badge !== null && (
-                  <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                    activeSection === item.id
-                      ? 'bg-white bg-opacity-20 text-white'
-                      : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {item.badge}
-                  </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent rounded-xl"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'} transition-colors`} />
+                {!sidebarCollapsed && (
+                  <span className={`font-medium ${isActive ? 'text-white' : ''}`}>{item.name}</span>
+                )}
+                {isActive && !sidebarCollapsed && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="ml-auto w-2 h-2 bg-white rounded-full"
+                  />
                 )}
               </motion.button>
-            ))}
-          </nav>
+            );
+          })}
+        </nav>
 
-          {/* Logout */}
-          <div className="p-4 border-t border-gray-200 bg-gray-50">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-300 border border-red-200 hover:border-red-300"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="font-medium">Logout</span>
-            </motion.button>
-          </div>
+        {/* Logout */}
+        <div className="p-4">
+          <button
+            onClick={handleLogout}
+            className={`w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 group ${
+              sidebarCollapsed ? 'justify-center' : ''
+            }`}
+          >
+            <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            {!sidebarCollapsed && <span className="font-medium">Logout</span>}
+          </button>
         </div>
       </motion.div>
 
       {/* Main Content */}
-      <div className="ml-72 min-h-screen">
-        {/* Top Header */}
-        <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="bg-white shadow-sm border-b border-gray-200 px-8 py-4"
+      <div className="flex-1 p-8 overflow-auto">
+        {/* Header */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
-                {activeSection === 'overview' && <><BarChart3 className="w-7 h-7 text-blue-600" /> <span>Dashboard Overview</span></>}
-                {activeSection === 'users' && <><Users className="w-7 h-7 text-green-600" /> <span>User Management</span></>}
-                {activeSection === 'companies' && <><Building className="w-7 h-7 text-purple-600" /> <span>Company Management</span></>}
-                {activeSection === 'jobs' && <><Briefcase className="w-7 h-7 text-orange-600" /> <span>Job Management</span></>}
-                {activeSection === 'analytics' && <><PieChart className="w-7 h-7 text-indigo-600" /> <span>Analytics</span></>}
-                {activeSection === 'settings' && <><Settings className="w-7 h-7 text-gray-600" /> <span>Settings</span></>}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {activeSection === 'overview' && 'Monitor your platform performance and key metrics'}
-                {activeSection === 'users' && 'Manage user accounts and permissions'}
-                {activeSection === 'companies' && 'Oversee company registrations and verifications'}
-                {activeSection === 'jobs' && 'Monitor job postings and applications'}
-                {activeSection === 'analytics' && 'Analyze platform data and trends'}
-                {activeSection === 'settings' && 'Configure system settings and preferences'}
-              </p>
+          {/* Welcome Header */}
+          {activeSection === 'overview' && (
+            <div className="mb-8">
+              <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold mb-2">
+                      Welcome back, <span className="text-yellow-300">{localStorage.getItem('userName')?.split(' ')[0] || 'Admin'}</span>! 👋
+                    </h1>
+                    <p className="text-blue-100 text-lg">
+                      {currentTime.getHours() < 12 ? 'Good morning' : 
+                       currentTime.getHours() < 17 ? 'Good afternoon' : 'Good evening'}! Here's your platform overview for today.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-3">
+                      <p className="text-white/90 text-sm font-medium">
+                        {currentTime.toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                      <p className="text-white font-bold text-lg">
+                        {currentTime.toLocaleTimeString('en-US', { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <Bell className="w-5 h-5" />
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => fetchDashboardData()}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Refresh</span>
-              </motion.button>
-            </div>
-          </div>
-        </motion.div>
+          )}
 
-        {/* Content Area */}
-        <div className="p-8">{/* Content will go here */}
+          {/* Section Headers for other pages */}
+          {activeSection !== 'overview' && (
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">
+                  {activeSection === 'users' && 'User Management'}
+                  {activeSection === 'companies' && 'Company Management'}
+                  {activeSection === 'mentors' && 'Mentor Management'}
+                  {activeSection === 'jobs' && 'Job Management'}
+                  {activeSection === 'analytics' && 'Analytics'}
+                  {activeSection === 'settings' && 'Settings'}
+                </h1>
+                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                  {activeSection === 'users' && <span>Manage user accounts and permissions</span>}
+                  {activeSection === 'companies' && <span>Oversee company registrations and verifications</span>}
+                  {activeSection === 'mentors' && <span>Add and manage mentors on the platform</span>}
+                  {activeSection === 'jobs' && <span>Monitor job postings and applications</span>}
+                  {activeSection === 'analytics' && <span>Analyze platform data and trends</span>}
+                  {activeSection === 'settings' && <span>Configure system settings and preferences</span>}
+                </div>
+              </div>
+              
+              {/* Header Actions for other sections */}
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <button className="p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200">
+                    <Bell className="w-5 h-5 text-gray-600" />
+                    {notifications > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                        {notifications}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">
+                      {currentTime.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
 
         {/* Overview Section */}
         {activeSection === 'overview' && (
-          <div className="space-y-8">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {dashboardStats.map((stat, index) => (
-                <motion.div
-                  key={stat.title}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300 relative overflow-hidden"
-                >
-                  <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${stat.color} opacity-10 rounded-full transform translate-x-8 -translate-y-8`}></div>
-                  <div className="relative">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-xl flex items-center justify-center shadow-lg`}>
-                        <stat.icon className="w-6 h-6 text-white" />
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="overview"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Top Action Bar */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2 bg-white rounded-lg px-4 py-2 shadow-sm border">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <select className="text-sm font-medium text-gray-700 bg-transparent border-none outline-none">
+                      <option>Last 30 days</option>
+                      <option>Last 7 days</option>
+                      <option>Today</option>
+                    </select>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      fetchStats();
+                      fetchRecentUsers();
+                    }}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-lg px-4 py-2 shadow-md border border-gray-300 transition-all duration-200 hover:shadow-lg"
+                  >
+                    <RefreshCw className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">Refresh</span>
+                  </button>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg px-4 py-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                    <Download className="w-4 h-4" />
+                    <span className="text-sm font-medium">Export Report</span>
+                  </button>
+                  <button className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg px-4 py-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                    <Users className="w-4 h-4" />
+                    <span className="text-sm font-medium">Add User</span>
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Key Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                  {
+                    title: 'Total Users',
+                    value: stats.overview?.totalUsers || 1247,
+                    change: '+12%',
+                    changeType: 'positive',
+                    icon: Users,
+                    color: 'blue'
+                  },
+                  {
+                    title: 'Active Jobs',
+                    value: stats.overview?.activeJobs || 89,
+                    change: '+8%',
+                    changeType: 'positive',
+                    icon: Briefcase,
+                    color: 'green'
+                  },
+                  {
+                    title: 'Companies',
+                    value: stats.overview?.employers || 156,
+                    change: '+15%',
+                    changeType: 'positive',
+                    icon: Building,
+                    color: 'purple'
+                  },
+                  {
+                    title: 'Mentors',
+                    value: stats.overview?.mentors || 23,
+                    change: '+18%',
+                    changeType: 'positive',
+                    icon: GraduationCap,
+                    color: 'indigo'
+                  }
+                ].map((metric, index) => (
+                  <motion.div
+                    key={metric.title}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + index * 0.1 }}
+                    className={`bg-gradient-to-br ${
+                      metric.color === 'blue' ? 'from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200' :
+                      metric.color === 'green' ? 'from-green-50 to-green-100 border-green-200 hover:from-green-100 hover:to-green-200' :
+                      metric.color === 'purple' ? 'from-purple-50 to-purple-100 border-purple-200 hover:from-purple-100 hover:to-purple-200' :
+                      metric.color === 'indigo' ? 'from-indigo-50 to-indigo-100 border-indigo-200 hover:from-indigo-100 hover:to-indigo-200' :
+                      'from-orange-50 to-orange-100 border-orange-200 hover:from-orange-100 hover:to-orange-200'
+                    } rounded-xl border-2 p-6 hover:shadow-xl transition-all duration-300 group relative overflow-hidden`}
+                  >
+                    <div className={`absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${
+                      metric.color === 'blue' ? 'from-blue-400 to-blue-600' :
+                      metric.color === 'green' ? 'from-green-400 to-green-600' :
+                      metric.color === 'purple' ? 'from-purple-400 to-purple-600' :
+                      metric.color === 'indigo' ? 'from-indigo-400 to-indigo-600' :
+                      'from-orange-400 to-orange-600'
+                    }`}></div>
+                    
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className={`p-3 rounded-xl ${
+                          metric.color === 'blue' ? 'bg-blue-500 text-white shadow-blue-200' :
+                          metric.color === 'green' ? 'bg-green-500 text-white shadow-green-200' :
+                          metric.color === 'purple' ? 'bg-purple-500 text-white shadow-purple-200' :
+                          metric.color === 'indigo' ? 'bg-indigo-500 text-white shadow-indigo-200' :
+                          'bg-orange-500 text-white shadow-orange-200'
+                        } shadow-lg transition-all duration-300 group-hover:scale-110`}>
+                          <metric.icon className="w-6 h-6" />
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          metric.changeType === 'positive' 
+                            ? 'bg-emerald-500 text-white shadow-emerald-200' 
+                            : 'bg-red-500 text-white shadow-red-200'
+                        } shadow-lg transition-all duration-300`}>
+                          {metric.changeType === 'positive' ? (
+                            <TrendingUp className="w-3 h-3 inline mr-1" />
+                          ) : (
+                            <TrendingDown className="w-3 h-3 inline mr-1" />
+                          )}
+                          {metric.change}
+                        </div>
                       </div>
-                      <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
-                        stat.changeType === 'increase' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {stat.changeType === 'increase' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                        <span>{stat.change}</span>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 mb-1">{metric.title}</p>
+                        <p className="text-3xl font-bold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors duration-300">
+                          {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
+                        </p>
+                        <p className="text-xs text-gray-500">vs last month</p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
-                      <p className="text-3xl font-bold text-gray-900 mb-2">{stat.value.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">{stat.description}</p>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Recent Users Table */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="lg:col-span-2 bg-gradient-to-br from-white to-blue-50/30 rounded-xl border-2 border-blue-100 shadow-lg"
+                >
+                  <div className="px-6 py-4 border-b border-blue-200 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-xl">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold flex items-center">
+                        <Users className="w-5 h-5 mr-2" />
+                        Recent Users
+                      </h3>
+                      <button 
+                        onClick={() => setActiveSection('users')}
+                        className="text-sm text-blue-100 hover:text-white font-medium bg-white/20 px-3 py-1 rounded-lg hover:bg-white/30 transition-colors"
+                      >
+                        View all
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {recentUsersLoading ? (
+                          <tr>
+                            <td colSpan="4" className="px-6 py-8 text-center">
+                              <div className="flex flex-col items-center">
+                                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+                                <p className="text-gray-500 text-sm">Loading recent users...</p>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : recentUsers.length > 0 ? recentUsers.map((user, index) => (
+                          <tr key={user._id || index} className="hover:bg-gray-50 transition-colors duration-200">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-10 w-10">
+                                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
+                                    user.role === 'employer' 
+                                      ? 'bg-gradient-to-r from-purple-500 to-purple-600' 
+                                      : user.role === 'mentor'
+                                      ? 'bg-gradient-to-r from-indigo-500 to-indigo-600'
+                                      : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                                  }`}>
+                                    {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {user.name || 'Unknown User'}
+                                  </div>
+                                  <div className="text-sm text-gray-500">{user.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                user.role === 'employer' 
+                                  ? 'bg-purple-100 text-purple-800' 
+                                  : user.role === 'mentor'
+                                  ? 'bg-indigo-100 text-indigo-800'
+                                  : user.role === 'admin'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {user.role === 'employer' ? 'Employer' : 
+                                 user.role === 'mentor' ? 'Mentor' :
+                                 user.role === 'admin' ? 'Admin' : 'Job Seeker'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                user.isActive 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {user.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                            </td>
+                          </tr>
+                        )) : (
+                          <tr>
+                            <td colSpan="4" className="px-6 py-8 text-center">
+                              <div className="flex flex-col items-center">
+                                <Users className="w-12 h-12 text-gray-300 mb-4" />
+                                <p className="text-gray-500 text-sm">No recent users found</p>
+                                <button 
+                                  onClick={fetchRecentUsers}
+                                  className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                >
+                                  Refresh
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+
+                {/* Activity Feed */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="bg-gradient-to-br from-white to-green-50/30 rounded-xl border-2 border-green-100 shadow-lg"
+                >
+                  <div className="px-6 py-4 border-b border-green-200 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-t-xl">
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Activity className="w-5 h-5 mr-2" />
+                      Activity Feed
+                    </h3>
+                  </div>
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      {/* Dynamic activities based on recent users */}
+                      {recentUsers.slice(0, 3).map((user, index) => (
+                        <motion.div 
+                          key={user._id || index}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                          className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                        >
+                          <div className="flex-shrink-0">
+                            <div className={`p-2 rounded-lg ${
+                              user.role === 'employer' ? 'bg-purple-100' : 'bg-blue-100'
+                            }`}>
+                              {user.role === 'employer' ? (
+                                <Building className="w-4 h-4 text-purple-600" />
+                              ) : (
+                                <UserCheck className="w-4 h-4 text-blue-600" />
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-900 font-medium">
+                              {user.role === 'employer' ? 'New company registered' : 'New user registered'}
+                            </p>
+                            <p className="text-xs text-gray-600 truncate">
+                              {user.name} ({user.email})
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Recently'}
+                            </p>
+                          </div>
+                        </motion.div>
+                      ))}
+                      
+                      {/* Static activities */}
+                      {[
+                        { icon: Shield, text: 'System backup completed', time: '1 hour ago', color: 'text-green-500', bg: 'bg-green-100' },
+                        { icon: BarChart3, text: 'Analytics report generated', time: '2 hours ago', color: 'text-blue-500', bg: 'bg-blue-100' }
+                      ].map((activity, index) => (
+                        <motion.div 
+                          key={`static-${index}`}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: (recentUsers.length + index) * 0.1 }}
+                          className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                        >
+                          <div className="flex-shrink-0">
+                            <div className={`p-2 rounded-lg ${activity.bg}`}>
+                              <activity.icon className={`w-4 h-4 ${activity.color}`} />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-900 font-medium">{activity.text}</p>
+                            <p className="text-xs text-gray-500">{activity.time}</p>
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
                   </div>
                 </motion.div>
-              ))}
-            </div>
+              </div>
 
-            {/* Dashboard Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Recent Activity */}
-              <div className="lg:col-span-2">
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100"
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                      <Activity className="w-6 h-6 text-blue-600" />
-                      <span>Recent Activity</span>
+              {/* System Status */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="bg-gradient-to-br from-white to-purple-50/30 rounded-xl border-2 border-purple-100 shadow-lg hover:shadow-xl transition-shadow duration-300"
+              >
+                <div className="px-6 py-4 border-b border-purple-200 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-t-xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold flex items-center">
+                      <Shield className="w-5 h-5 mr-2" />
+                      System Status
                     </h3>
-                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">View All</button>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+                      <span className="text-sm text-green-200 font-medium">All Systems Operational</span>
+                    </div>
                   </div>
-                  <div className="space-y-4">
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     {[
-                      { icon: UserCheck, color: 'text-green-500 bg-green-100', title: 'New user registered', desc: 'john@example.com joined as job seeker', time: '2 hours ago' },
-                      { icon: Building, color: 'text-blue-500 bg-blue-100', title: 'Company verification pending', desc: 'HealthPlus submitted verification documents', time: '4 hours ago' },
-                      { icon: Briefcase, color: 'text-purple-500 bg-purple-100', title: 'New job posted', desc: 'TechCorp Inc posted "Product Manager" position', time: '6 hours ago' },
-                      { icon: Star, color: 'text-yellow-500 bg-yellow-100', title: 'Application received', desc: 'New application for Software Engineer role', time: '8 hours ago' },
-                      { icon: Mail, color: 'text-indigo-500 bg-indigo-100', title: 'Email campaign sent', desc: 'Weekly newsletter sent to 1,234 users', time: '1 day ago' }
-                    ].map((activity, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 + index * 0.1 }}
-                        className="flex items-center space-x-4 p-4 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer"
+                      { label: 'API Status', status: 'Operational', color: 'green', icon: CheckCircle, detail: 'All endpoints responding' },
+                      { label: 'Database', status: 'Connected', color: 'green', icon: CheckCircle, detail: 'MongoDB cluster healthy' },
+                      { label: 'Response Time', status: '< 200ms', color: 'blue', icon: Zap, detail: 'Average response time' },
+                      { label: 'Uptime', status: '99.9%', color: 'green', icon: Activity, detail: 'Last 30 days' }
+                    ].map((item, index) => (
+                      <motion.div 
+                        key={index} 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.8 + index * 0.1 }}
+                        className="text-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 group"
                       >
-                        <div className={`w-10 h-10 ${activity.color} rounded-xl flex items-center justify-center`}>
-                          <activity.icon className="w-5 h-5" />
+                        <div className={`inline-flex items-center justify-center w-14 h-14 rounded-full mb-3 transition-transform duration-200 group-hover:scale-110 ${
+                          item.color === 'green' ? 'bg-green-100 group-hover:bg-green-200' :
+                          item.color === 'blue' ? 'bg-blue-100 group-hover:bg-blue-200' :
+                          'bg-gray-100 group-hover:bg-gray-200'
+                        }`}>
+                          <item.icon className={`w-7 h-7 ${
+                            item.color === 'green' ? 'text-green-600' :
+                            item.color === 'blue' ? 'text-blue-600' :
+                            'text-gray-600'
+                          }`} />
                         </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-900">{activity.title}</p>
-                          <p className="text-sm text-gray-600">{activity.desc}</p>
-                        </div>
-                        <span className="text-xs text-gray-500 font-medium">{activity.time}</span>
+                        <p className="text-sm font-medium text-gray-900 mb-1">{item.label}</p>
+                        <p className={`text-lg font-bold mb-1 ${
+                          item.color === 'green' ? 'text-green-600' :
+                          item.color === 'blue' ? 'text-blue-600' :
+                          'text-gray-600'
+                        }`}>
+                          {item.status}
+                        </p>
+                        <p className="text-xs text-gray-500">{item.detail}</p>
                       </motion.div>
                     ))}
                   </div>
-                </motion.div>
-              </div>
+                </div>
+              </motion.div>
 
-              {/* Quick Stats */}
-              <div className="space-y-6">
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center space-x-2">
-                    <Globe className="w-5 h-5 text-green-600" />
-                    <span>Platform Health</span>
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Server Status</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <span className="text-green-600 font-medium">Online</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Database</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <span className="text-green-600 font-medium">Connected</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">API Response</span>
-                      <span className="text-gray-900 font-medium">~120ms</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Uptime</span>
-                      <span className="text-gray-900 font-medium">99.9%</span>
-                    </div>
-                  </div>
-                </motion.div>
 
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white"
-                >
-                  <h3 className="text-lg font-bold mb-4">Quick Actions</h3>
-                  <div className="space-y-3">
-                    <button className="w-full flex items-center space-x-3 p-3 bg-white bg-opacity-20 rounded-xl hover:bg-opacity-30 transition-colors">
-                      <Plus className="w-4 h-4" />
-                      <span>Add New User</span>
-                    </button>
-                    <button className="w-full flex items-center space-x-3 p-3 bg-white bg-opacity-20 rounded-xl hover:bg-opacity-30 transition-colors">
-                      <Download className="w-4 h-4" />
-                      <span>Export Data</span>
-                    </button>
-                    <button className="w-full flex items-center space-x-3 p-3 bg-white bg-opacity-20 rounded-xl hover:bg-opacity-30 transition-colors">
-                      <Upload className="w-4 h-4" />
-                      <span>Import Users</span>
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            </div>
-          </div>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {/* Users Section */}
         {activeSection === 'users' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-lg border border-gray-100"
-          >
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between space-y-4 lg:space-y-0">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">User Management</h3>
-                  <p className="text-gray-600 mt-1">Manage all registered users and their permissions</p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search users..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors w-64"
-                    />
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="users"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Filters and Search */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20"
+              >
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        type="text"
+                        placeholder="Search users..."
+                        className="pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200 w-full sm:w-64"
+                        value={filters.search}
+                        onChange={(e) => handleFilterChange('search', e.target.value)}
+                      />
+                    </div>
+                    <select
+                      className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
+                      value={filters.role}
+                      onChange={(e) => handleFilterChange('role', e.target.value)}
+                    >
+                      <option value="">All Roles</option>
+                      <option value="jobseeker">Job Seekers</option>
+                      <option value="employer">Employers</option>
+                    </select>
+                    <select
+                      className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                    >
+                      <option value="">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
                   </div>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add User</span>
-                  </motion.button>
+                  <div className="flex items-center space-x-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => fetchUsers(currentPage)}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="font-medium">Refresh</span>
+                    </motion.button>
+                    <motion.button 
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="font-medium">Export</span>
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Join Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                          user.role === 'employer' ? 'bg-blue-100 text-blue-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {user.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.joinDate}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button className="text-green-600 hover:text-green-900">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
+              </motion.div>
+
+              {/* Users Table */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-white/20"
+              >
+                <div className="px-6 py-6 border-b border-gray-200/50 bg-gradient-to-r from-gray-50 to-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">Registered Users</h3>
+                      <p className="text-sm text-gray-600 mt-1">Manage all registered users on the platform</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                        {pagination.totalUsers || 0} Total
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <div className="relative">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200"></div>
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent absolute top-0"></div>
+                    </div>
+                    <span className="mt-4 text-gray-600 font-medium">Loading users...</span>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200/50">
+                      <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">User</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Role</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Joined</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Verification</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white/50 divide-y divide-gray-200/30">
+                        {users.map((user, index) => (
+                          <motion.tr 
+                            key={user._id} 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="hover:bg-blue-50/50 transition-all duration-200 group"
+                          >
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-12 w-12">
+                                  <div className="h-12 w-12 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-200">
+                                    <span className="text-white font-bold text-sm">
+                                      {user.name.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-900 transition-colors">
+                                    {user.name}
+                                  </div>
+                                  <div className="text-sm text-gray-500 flex items-center mt-1">
+                                    <Mail className="w-3 h-3 mr-1" />
+                                    {user.email}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold shadow-sm ${
+                                user.role === 'jobseeker'
+                                  ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
+                                  : user.role === 'employer'
+                                  ? 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800'
+                                  : 'bg-gradient-to-r from-red-100 to-red-200 text-red-800'
+                              }`}>
+                                {user.role === 'jobseeker' && <User className="w-3 h-3 mr-1" />}
+                                {user.role === 'employer' && <Building className="w-3 h-3 mr-1" />}
+                                {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
+                                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold shadow-sm ${
+                                user.isActive ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800' : 'bg-gradient-to-r from-red-100 to-red-200 text-red-800'
+                              }`}>
+                                {user.isActive ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+                                {user.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap text-sm text-gray-600">
+                              <div className="flex items-center">
+                                <Calendar className="w-3 h-3 mr-2 text-gray-400" />
+                                <span className="font-medium">{formatDate(user.createdAt)}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold shadow-sm ${
+                                user.isEmailVerified ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800' : 'bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800'
+                              }`}>
+                                {user.isEmailVerified ? <CheckCircle className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}
+                                {user.isEmailVerified ? 'Verified' : 'Pending'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center space-x-2">
+                                <motion.button 
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </motion.button>
+                                <motion.button 
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  className="p-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 rounded-lg transition-all duration-200"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => updateUserStatus(user._id, !user.isActive)}
+                                  className={`p-2 rounded-lg transition-all duration-200 ${
+                                    user.isActive 
+                                      ? 'text-orange-600 hover:text-orange-800 hover:bg-orange-100' 
+                                      : 'text-green-600 hover:text-green-800 hover:bg-green-100'
+                                  }`}
+                                >
+                                  {user.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                </motion.button>
+                                <motion.button 
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-all duration-200"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </motion.button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+                {/* Pagination */}
+                {pagination.totalPages > 1 && (
+                  <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-4 flex items-center justify-between border-t border-gray-200/50">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={!pagination.hasPrev}
+                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 shadow-sm"
+                      >
+                        Previous
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                        disabled={!pagination.hasNext}
+                        className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 shadow-sm"
+                      >
+                        Next
+                      </motion.button>
+                    </div>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700 font-medium">
+                          Showing <span className="font-bold text-blue-600">{((currentPage - 1) * 10) + 1}</span> to{' '}
+                          <span className="font-bold text-blue-600">{Math.min(currentPage * 10, pagination.totalUsers)}</span> of{' '}
+                          <span className="font-bold text-blue-600">{pagination.totalUsers}</span> results
+                        </p>
+                      </div>
+                      <div>
+                        <nav className="relative z-0 inline-flex rounded-xl shadow-sm -space-x-px">
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={!pagination.hasPrev}
+                            className="relative inline-flex items-center px-3 py-2 rounded-l-xl border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </motion.button>
+                          {[...Array(Math.min(pagination.totalPages, 5))].map((_, index) => (
+                            <motion.button
+                              key={index + 1}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => setCurrentPage(index + 1)}
+                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium transition-all duration-200 ${
+                                currentPage === index + 1
+                                  ? 'z-10 bg-gradient-to-r from-blue-500 to-blue-600 border-blue-500 text-white shadow-lg'
+                                  : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                              }`}
+                            >
+                              {index + 1}
+                            </motion.button>
+                          ))}
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                            disabled={!pagination.hasNext}
+                            className="relative inline-flex items-center px-3 py-2 rounded-r-xl border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </motion.button>
+                        </nav>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {/* Companies Section */}
         {activeSection === 'companies' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-lg border border-gray-100"
-          >
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between space-y-4 lg:space-y-0">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Company Management</h3>
-                  <p className="text-gray-600 mt-1">Monitor and manage registered companies</p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search companies..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors w-64"
-                    />
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="companies"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Companies Header */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Companies & Employers</h3>
+                    <p className="text-sm text-gray-600 mt-1">Manage registered companies and employers</p>
                   </div>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                  <select
-                    value={filterIndustry}
-                    onChange={(e) => setFilterIndustry(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Industries</option>
-                    <option value="technology">Technology</option>
-                    <option value="healthcare">Healthcare</option>
-                    <option value="education">Education</option>
-                    <option value="finance">Finance</option>
-                    <option value="other">Other</option>
-                  </select>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
+                    onClick={() => fetchCompanies(currentPage)}
+                    className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg hover:shadow-xl"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Company</span>
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="font-medium">Refresh</span>
                   </motion.button>
                 </div>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Company</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Industry</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Location</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Size</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Join Date</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {filteredCompanies.map((company, index) => (
-                    <motion.tr
-                      key={company.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center">
-                            <Building className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-gray-900">{company.name}</div>
-                            <div className="text-sm text-gray-500 flex items-center space-x-1">
-                              <Mail className="w-3 h-3" />
-                              <span>{company.email}</span>
+              </motion.div>
+
+              {/* Companies Table */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-white/20"
+              >
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Loading companies...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {companies.map((company) => (
+                        <tr key={company.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center">
+                                  <Building className="w-5 h-5 text-white" />
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{company.name}</div>
+                                <div className="text-sm text-gray-500 flex items-center">
+                                  <Mail className="w-3 h-3 mr-1" />
+                                  {company.email}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full ${
-                          company.industry === 'technology' ? 'bg-blue-100 text-blue-800' :
-                          company.industry === 'healthcare' ? 'bg-green-100 text-green-800' :
-                          company.industry === 'education' ? 'bg-purple-100 text-purple-800' :
-                          company.industry === 'finance' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {company.industry}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-1 text-sm text-gray-600">
-                          <MapPin className="w-3 h-3" />
-                          <span>{company.location}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900">{company.size}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          {company.status === 'active' ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full ${
-                            company.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {company.status}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-1 text-sm text-gray-600">
-                          <Calendar className="w-3 h-3" />
-                          <span>{new Date(company.joinDate).toLocaleDateString()}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                            title="View Details"
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {company.industry}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {company.location}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {company.size}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex flex-col space-y-1">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                company.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                                {company.status === 'active' ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+                                {company.status}
+                              </span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                company.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {company.verified ? <CheckCircle className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}
+                                {company.verified ? 'Verified' : 'Pending'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <Calendar className="w-3 h-3 mr-1" />
+                              {formatDate(company.joinDate)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-2">
+                              <button className="text-blue-600 hover:text-blue-900 p-1 rounded">
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button className="text-green-600 hover:text-green-900 p-1 rounded">
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button className="text-red-600 hover:text-red-900 p-1 rounded">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Pagination for Companies */}
+              {pagination.totalPages > 1 && (
+                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={!pagination.hasPrev}
+                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                      disabled={!pagination.hasNext}
+                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm text-gray-700">
+                        Showing <span className="font-medium">{((currentPage - 1) * 10) + 1}</span> to{' '}
+                        <span className="font-medium">{Math.min(currentPage * 10, pagination.totalCompanies)}</span> of{' '}
+                        <span className="font-medium">{pagination.totalCompanies}</span> results
+                      </p>
+                    </div>
+                    <div>
+                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={!pagination.hasPrev}
+                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </button>
+                        {[...Array(Math.min(pagination.totalPages, 5))].map((_, index) => (
+                          <button
+                            key={index + 1}
+                            onClick={() => setCurrentPage(index + 1)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              currentPage === index + 1
+                                ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            }`}
                           >
-                            <Eye className="w-4 h-4" />
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </motion.button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-              {filteredCompanies.length === 0 && (
-                <motion.div
+                            {index + 1}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                          disabled={!pagination.hasNext}
+                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+              )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        )}
+
+        {/* Mentors Section */}
+        {activeSection === 'mentors' && (
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="mentors"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Mentors Header */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Mentors Management</h3>
+                    <p className="text-sm text-gray-600 mt-1">Add and manage mentors on the platform</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowMentorForm(true)}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span className="font-medium">Add Mentor</span>
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => fetchMentors(currentPage)}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="font-medium">Refresh</span>
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Add Mentor Form Modal */}
+              {showMentorForm && (
+                <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-center py-16"
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
                 >
-                  <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Building className="w-12 h-12 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No companies found</h3>
-                  <p className="text-gray-500 mb-6">
-                    {searchTerm || filterStatus !== 'all' || filterIndustry !== 'all'
-                      ? 'Try adjusting your search or filter criteria.'
-                      : 'No companies have registered yet.'}
-                  </p>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="inline-flex items-center space-x-2 px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Add First Company</span>
-                  </motion.button>
+                    <div className="p-6 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-gray-900">Add New Mentor</h3>
+                        <button
+                          onClick={() => setShowMentorForm(false)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <form onSubmit={handleMentorFormSubmit} className="p-6 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Full Name *
+                          </label>
+                          <input
+                            type="text"
+                            value={mentorFormData.name}
+                            onChange={(e) => handleMentorFormChange('name', e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="Enter mentor's full name"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Email Address *
+                          </label>
+                          <input
+                            type="email"
+                            value={mentorFormData.email}
+                            onChange={(e) => handleMentorFormChange('email', e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="Enter mentor's email"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Password *
+                          </label>
+                          <input
+                            type="password"
+                            value={mentorFormData.password}
+                            onChange={(e) => handleMentorFormChange('password', e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="Enter password"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Expertise Area *
+                          </label>
+                          <input
+                            type="text"
+                            value={mentorFormData.expertise}
+                            onChange={(e) => handleMentorFormChange('expertise', e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="e.g., Web Development, Data Science"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Experience Level
+                          </label>
+                          <select
+                            value={mentorFormData.experience}
+                            onChange={(e) => handleMentorFormChange('experience', e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          >
+                            <option value="">Select experience</option>
+                            <option value="1-3">1-3 years</option>
+                            <option value="3-5">3-5 years</option>
+                            <option value="5-10">5-10 years</option>
+                            <option value="10+">10+ years</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Phone Number
+                          </label>
+                          <input
+                            type="tel"
+                            value={mentorFormData.phone}
+                            onChange={(e) => handleMentorFormChange('phone', e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="Enter phone number"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Location
+                        </label>
+                        <input
+                          type="text"
+                          value={mentorFormData.location}
+                          onChange={(e) => handleMentorFormChange('location', e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          placeholder="Enter location"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Bio
+                        </label>
+                        <textarea
+                          value={mentorFormData.bio}
+                          onChange={(e) => handleMentorFormChange('bio', e.target.value)}
+                          rows={4}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          placeholder="Enter mentor's bio and background"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-end space-x-4 pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowMentorForm(false)}
+                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 disabled:opacity-50"
+                        >
+                          {loading ? 'Adding...' : 'Add Mentor'}
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
                 </motion.div>
               )}
-            </div>
-          </motion.div>
+
+              {/* Mentors Table */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-white/20"
+              >
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <span className="ml-2 text-gray-600">Loading mentors...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Mentor
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Expertise
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Experience
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Joined
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {mentors.map((mentor, index) => (
+                        <motion.tr 
+                          key={mentor._id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <GraduationCap className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{mentor.name}</div>
+                                <div className="text-sm text-gray-500">{mentor.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{mentor.profile?.expertise || 'Not specified'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{mentor.profile?.experience || 'Not specified'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              mentor.isActive 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {mentor.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatDate(mentor.createdAt)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => updateUserStatus(mentor._id, !mentor.isActive)}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  mentor.isActive 
+                                    ? 'text-red-600 hover:bg-red-50' 
+                                    : 'text-green-600 hover:bg-green-50'
+                                }`}
+                                title={mentor.isActive ? 'Deactivate' : 'Activate'}
+                              >
+                                {mentor.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                              </button>
+                              <button
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="View Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {mentors.length === 0 && (
+                    <div className="text-center py-12">
+                      <GraduationCap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No mentors found</p>
+                      <button
+                        onClick={() => setShowMentorForm(true)}
+                        className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        Add First Mentor
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Pagination */}
+              {pagination.totalPages > 1 && (
+                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={!pagination.hasPrev}
+                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                      disabled={!pagination.hasNext}
+                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm text-gray-700">
+                        Showing <span className="font-medium">{((currentPage - 1) * 10) + 1}</span> to{' '}
+                        <span className="font-medium">
+                          {Math.min(currentPage * 10, pagination.totalUsers || 0)}
+                        </span>{' '}
+                        of <span className="font-medium">{pagination.totalUsers || 0}</span> results
+                      </p>
+                    </div>
+                    <div>
+                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={!pagination.hasPrev}
+                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                          disabled={!pagination.hasNext}
+                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+              )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {/* Jobs Section */}
         {activeSection === 'jobs' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                      <Briefcase className="w-6 h-6 text-orange-600" />
-                      <span>Active Job Postings</span>
-                    </h3>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add Job</span>
-                    </motion.button>
-                  </div>
-                  <div className="space-y-4">
-                    {jobs.map((job, index) => (
-                      <motion.div
-                        key={job.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-bold text-gray-900">{job.title}</h4>
-                            <p className="text-gray-600 text-sm">{job.company}</p>
-                            <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                              <span className="flex items-center space-x-1">
-                                <Calendar className="w-3 h-3" />
-                                <span>Posted {job.posted}</span>
-                              </span>
-                              <span className="flex items-center space-x-1">
-                                <Users className="w-3 h-3" />
-                                <span>{job.applications} applications</span>
-                              </span>
-                              <span className="font-medium text-green-600">{job.salary}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">
-                              {job.status}
-                            </span>
-                            <button className="p-2 text-gray-400 hover:text-gray-600">
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-6">
-                <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Job Statistics</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Total Jobs</span>
-                      <span className="font-bold text-gray-900">{jobs.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Total Applications</span>
-                      <span className="font-bold text-gray-900">{jobs.reduce((sum, job) => sum + job.applications, 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Avg. Applications</span>
-                      <span className="font-bold text-gray-900">{Math.round(jobs.reduce((sum, job) => sum + job.applications, 0) / jobs.length)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="jobs"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", bounce: 0.4 }}
+                className="w-24 h-24 bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg"
+              >
+                <Briefcase className="w-12 h-12 text-white" />
+              </motion.div>
+              <motion.h3 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="text-2xl font-bold text-gray-900 mb-3"
+              >
+                Job Management
+              </motion.h3>
+              <motion.p 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="text-gray-600 mb-6 text-lg"
+              >
+                Job posting management features are coming soon.
+              </motion.p>
+              <motion.button 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+              >
+                Coming Soon
+              </motion.button>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {/* Analytics Section */}
         {activeSection === 'analytics' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-                  <PieChart className="w-6 h-6 text-indigo-600" />
-                  <span>User Distribution</span>
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                    <span className="text-blue-700 font-medium">Job Seekers</span>
-                    <span className="text-blue-900 font-bold">{users.filter(u => u.role === 'jobseeker').length}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                    <span className="text-purple-700 font-medium">Employers</span>
-                    <span className="text-purple-900 font-bold">{users.filter(u => u.role === 'employer').length}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                    <span className="text-green-700 font-medium">Active Users</span>
-                    <span className="text-green-900 font-bold">{users.filter(u => u.status === 'active').length}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-                <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-                  <BarChart3 className="w-6 h-6 text-green-600" />
-                  <span>Industry Breakdown</span>
-                </h3>
-                <div className="space-y-3">
-                  {['technology', 'healthcare', 'education', 'finance', 'other'].map((industry) => {
-                    const count = companies.filter(c => c.industry === industry).length;
-                    const percentage = companies.length > 0 ? (count / companies.length) * 100 : 0;
-                    return (
-                      <div key={industry} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-700 capitalize font-medium">{industry}</span>
-                          <span className="text-gray-900 font-bold">{count}</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-gradient-to-r from-green-400 to-blue-500 h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="analytics"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20"
+              >
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring", bounce: 0.4 }}
+                  className="w-24 h-24 bg-gradient-to-r from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg"
+                >
+                  <BarChart3 className="w-12 h-12 text-white" />
+                </motion.div>
+                <motion.h3 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-2xl font-bold text-gray-900 mb-3"
+                >
+                  Advanced Analytics
+                </motion.h3>
+                <motion.p 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-gray-600 mb-6 text-lg"
+                >
+                  Detailed analytics and reporting features are under development.
+                </motion.p>
+                <motion.button 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-8 py-3 bg-gradient-to-r from-pink-600 to-pink-700 text-white rounded-xl hover:from-pink-700 hover:to-pink-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+                >
+                  Coming Soon
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {/* Settings Section */}
         {activeSection === 'settings' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100"
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="settings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20"
+              >
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring", bounce: 0.4 }}
+                  className="w-24 h-24 bg-gradient-to-r from-gray-500 to-gray-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg"
+                >
+                  <Settings className="w-12 h-12 text-white" />
+                </motion.div>
+                <motion.h3 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-2xl font-bold text-gray-900 mb-3"
+                >
+                  System Settings
+                </motion.h3>
+                <motion.p 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-gray-600 mb-6 text-lg"
+                >
+                  Platform configuration and settings management.
+                </motion.p>
+                <motion.button 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-8 py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+                >
+                  Coming Soon
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </div>
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
           >
-            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center space-x-2">
-              <Settings className="w-6 h-6 text-gray-600" />
-              <span>System Settings</span>
-            </h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Platform Settings</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <span className="text-gray-700">User Registration</span>
-                      <button className="w-12 h-6 bg-green-500 rounded-full relative">
-                        <div className="w-5 h-5 bg-white rounded-full absolute right-0.5 top-0.5"></div>
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <span className="text-gray-700">Email Notifications</span>
-                      <button className="w-12 h-6 bg-green-500 rounded-full relative">
-                        <div className="w-5 h-5 bg-white rounded-full absolute right-0.5 top-0.5"></div>
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <span className="text-gray-700">Auto-approve Companies</span>
-                      <button className="w-12 h-6 bg-gray-300 rounded-full relative">
-                        <div className="w-5 h-5 bg-white rounded-full absolute left-0.5 top-0.5"></div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-white" />
               </div>
-              <div className="space-y-6">
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">System Information</h4>
-                  <div className="space-y-3">
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Version</div>
-                      <div className="font-semibold text-gray-900">SkillSyncer v2.1.0</div>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Last Updated</div>
-                      <div className="font-semibold text-gray-900">January 30, 2024</div>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Database Status</div>
-                      <div className="font-semibold text-green-600">Connected</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">Success!</h3>
+              <p className="text-gray-600 mb-6">{successMessage}</p>
+              <button
+                onClick={() => setShowSuccessPopup(false)}
+                className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 font-medium"
+              >
+                OK
+              </button>
             </div>
           </motion.div>
-        )}
-        </div>
-      </div>
+        </motion.div>
+      )}
     </div>
   );
 };
