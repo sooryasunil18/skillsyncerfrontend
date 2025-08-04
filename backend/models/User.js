@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
     default: 'jobseeker',
     required: true
   },
-  // Jobseeker and Mentor specific fields
+  // Jobseeker specific fields
   profile: {
     bio: {
       type: String,
@@ -61,11 +61,6 @@ const userSchema = new mongoose.Schema({
     },
     portfolio: {
       type: String, // URL to portfolio
-    },
-    // Mentor specific fields
-    expertise: {
-      type: String,
-      trim: true
     }
   },
   // Employer specific fields
@@ -98,6 +93,34 @@ const userSchema = new mongoose.Schema({
     size: {
       type: String,
       enum: ['1-10', '11-50', '51-200', '201-500', '500+']
+    }
+  },
+  // Mentor specific fields
+  mentorProfile: {
+    bio: {
+      type: String,
+      maxlength: [500, 'Bio cannot exceed 500 characters']
+    },
+    expertise: [{
+      type: String,
+      trim: true
+    }],
+    yearsOfExperience: {
+      type: String,
+      enum: ['0-1', '1-3', '3-5', '5-10', '10+'],
+      default: '0-1'
+    },
+    location: {
+      type: String,
+      trim: true
+    },
+    phone: {
+      type: String,
+      trim: true
+    },
+    linkedin: {
+      type: String,
+      trim: true
     }
   },
   isEmailVerified: {
@@ -139,42 +162,40 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Calculate profile completion
+  // Calculate profile completion
 userSchema.methods.calculateProfileCompletion = function() {
   let completion = 0;
-  let totalFields = 6; // Default for employer
-  
-  if (this.role === 'jobseeker') {
-    totalFields = 8;
-  } else if (this.role === 'mentor') {
-    totalFields = 7;
-  }
+  let totalFields = 0;
   
   // Basic fields (common for all)
   if (this.name) completion++;
   if (this.email) completion++;
   
   if (this.role === 'jobseeker') {
+    totalFields = 8;
     if (this.profile.bio) completion++;
     if (this.profile.skills && this.profile.skills.length > 0) completion++;
     if (this.profile.experience) completion++;
     if (this.profile.location) completion++;
     if (this.profile.phone) completion++;
     if (this.profile.resume) completion++;
-  } else if (this.role === 'mentor') {
-    if (this.profile.bio) completion++;
-    if (this.profile.expertise) completion++;
-    if (this.profile.experience) completion++;
-    if (this.profile.location) completion++;
-    if (this.profile.phone) completion++;
   } else if (this.role === 'employer') {
+    totalFields = 6;
     if (this.company.name) completion++;
     if (this.company.description) completion++;
     if (this.company.location) completion++;
     if (this.company.website) completion++;
+  } else if (this.role === 'mentor') {
+    totalFields = 7;
+    if (this.mentorProfile.bio) completion++;
+    if (this.mentorProfile.expertise && this.mentorProfile.expertise.length > 0) completion++;
+    if (this.mentorProfile.yearsOfExperience) completion++;
+    if (this.mentorProfile.location) completion++;
+    if (this.mentorProfile.phone) completion++;
+    if (this.mentorProfile.linkedin) completion++;
   }
   
-  this.profileCompletion = Math.round((completion / totalFields) * 100);
+  this.profileCompletion = totalFields > 0 ? Math.round((completion / totalFields) * 100) : 0;
   return this.profileCompletion;
 };
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { sendMentorCredentials, sendNotificationEmail } = require('../utils/emailService');
 
 // Middleware to check if user is admin
 const adminAuth = async (req, res, next) => {
@@ -63,6 +64,118 @@ router.get('/users', [protect, adminAuth], async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching users',
+      error: error.message
+    });
+  }
+});
+
+// Get all mentors (new endpoint)
+router.get('/mentors', [protect, adminAuth], async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+
+    const filter = { role: 'mentor' };
+    if (status) filter.isActive = status === 'active';
+
+    const skip = (page - 1) * limit;
+
+    const mentors = await User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const totalMentors = await User.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        mentors,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalMentors / limit),
+          totalMentors,
+          hasNext: page * limit < totalMentors,
+          hasPrev: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching mentors:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching mentors',
+      error: error.message
+    });
+  }
+});
+
+// Add a new mentor (new endpoint)
+router.post('/mentors', [protect, adminAuth], async (req, res) => {
+  try {
+    const { name, email, password, mentorProfile } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and password are required'
+      });
+    }
+
+    // Check if mentor already exists
+    const existingMentor = await User.findOne({ email });
+    if (existingMentor) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mentor already exists with this email'
+      });
+    }
+
+    // Store plain password for email before it gets hashed
+    const plainPassword = password;
+
+    // Create mentor user
+    const mentor = await User.create({
+      name,
+      email,
+      password,
+      role: 'mentor',
+      mentorProfile
+    });
+
+    mentor.calculateProfileCompletion();
+    await mentor.save();
+
+    const mentorResponse = await User.findById(mentor._id).select('-password');
+
+    // Send credentials email to mentor
+    try {
+      const emailResult = await sendMentorCredentials({
+        name,
+        email,
+        password: plainPassword // Send the plain password before it gets hashed
+      });
+      
+      if (emailResult.success) {
+        console.log('Mentor credentials email sent successfully');
+      } else {
+        console.error('Failed to send mentor credentials email:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('Error sending mentor credentials email:', emailError);
+      // Don't fail the mentor creation if email fails
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Mentor added successfully',
+      data: mentorResponse
+    });
+  } catch (error) {
+    console.error('Error adding mentor:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error adding mentor',
       error: error.message
     });
   }
@@ -244,91 +357,38 @@ router.delete('/users/:userId', [protect, adminAuth], async (req, res) => {
   }
 });
 
-// Add mentor
-router.post('/mentors', [protect, adminAuth], async (req, res) => {
+// Test email endpoint (for development only)
+router.post('/test-email', [protect, adminAuth], async (req, res) => {
   try {
-    const { name, email, password, expertise, experience, bio, phone, location } = req.body;
-
-    // Validation
-    if (!name || !email || !password || !expertise) {
+    const { email } = req.body;
+    
+    if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide name, email, password, and expertise'
+        message: 'Email is required'
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 6 characters long'
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already exists with this email'
-      });
-    }
-
-    // Create mentor user
-    const mentor = await User.create({
-      name,
+    const testResult = await sendNotificationEmail(
       email,
-      password,
-      role: 'mentor',
-      profile: {
-        bio,
-        phone,
-        location,
-        expertise,
-        experience
-      },
-      isEmailVerified: true, // Admin-created mentors are pre-verified
-      isActive: true
+      'SkillSyncer Email Test',
+      `
+        <h2>Email Configuration Test</h2>
+        <p>If you receive this email, your email configuration is working correctly!</p>
+        <p>Sent at: ${new Date().toISOString()}</p>
+      `
+    );
+
+    res.json({
+      success: testResult.success,
+      message: testResult.success ? 'Test email sent successfully' : 'Failed to send test email',
+      error: testResult.error || null
     });
-
-    // Calculate initial profile completion
-    mentor.calculateProfileCompletion();
-    await mentor.save();
-
-    // Remove password from response
-    const mentorResponse = await User.findById(mentor._id).select('-password');
-
-    res.status(201).json({
-      success: true,
-      message: 'Mentor added successfully',
-      data: {
-        mentor: mentorResponse
-      }
-    });
-
   } catch (error) {
-    console.error('Error adding mentor:', error);
-    
-    // Handle duplicate email error
-    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Mentor already exists with this email address'
-      });
-    }
-    
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation Error',
-        errors
-      });
-    }
-
+    console.error('Error sending test email:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while adding mentor',
+      message: 'Error sending test email',
       error: error.message
     });
   }

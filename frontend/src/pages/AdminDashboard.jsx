@@ -214,7 +214,18 @@ const AdminDashboard = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(mentorData)
+        body: JSON.stringify({
+          name: mentorData.name,
+          email: mentorData.email,
+          password: mentorData.password,
+          mentorProfile: {
+            bio: mentorData.bio,
+            expertise: mentorData.expertise ? [mentorData.expertise] : [],
+            yearsOfExperience: mentorData.experience,
+            location: mentorData.location,
+            phone: mentorData.phone
+          }
+        })
       });
       const data = await response.json();
       if (data.success) {
