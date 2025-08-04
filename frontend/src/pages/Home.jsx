@@ -100,98 +100,34 @@ const Home = () => {
               </div>
             </motion.div>
 
-            {/* Hero Illustration */}
+            {/* Hero Image */}
             <motion.div
               variants={itemVariants}
               className="relative"
             >
-              <motion.div
-                animate={{ rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="relative"
-              >
-                <div className="w-full max-w-lg mx-auto bg-gradient-to-br from-primary-100 to-secondary-100 rounded-3xl p-8 shadow-2xl">
-                  {/* Illustration Elements */}
-                  <div className="space-y-6">
-                    {/* Profile Cards */}
-                    <div className="flex justify-between">
-                      <motion.div
-                        animate={{ y: [0, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity, delay: 0 }}
-                        className="bg-white rounded-xl p-4 shadow-lg"
-                      >
-                        <div className="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center mb-2">
-                          <Users className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="text-xs font-semibold text-gray-700">Students</div>
-                      </motion.div>
-                      
-                      <motion.div
-                        animate={{ y: [0, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-                        className="bg-white rounded-xl p-4 shadow-lg"
-                      >
-                        <div className="w-12 h-12 bg-secondary-500 rounded-lg flex items-center justify-center mb-2">
-                          <Briefcase className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="text-xs font-semibold text-gray-700">Employers</div>
-                      </motion.div>
+              <div className="relative">
+                {/* Main Hero Image - Replace src with your actual image */}
+                <img 
+                   src="/Student-Internship.jpg" 
+                  alt="Skillsyncer - Connecting students, employers, mentors, and opportunities"
+                  className="w-full max-w-lg mx-auto h-96 object-cover rounded-3xl shadow-2xl"
+                  onError={(e) => {
+                    // Fallback if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                
+                <div className="w-full max-w-lg mx-auto h-96 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-3xl flex-col items-center justify-center shadow-2xl hidden">
+                  <div className="text-center">
+                    <div className="w-24 h-24 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Users className="w-12 h-12 text-white" />
                     </div>
-                    
-                    {/* Connection Lines */}
-                    <div className="flex justify-center">
-                      <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="w-16 h-16 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg"
-                      >
-                        <Zap className="w-8 h-8 text-white" />
-                      </motion.div>
-                    </div>
-                    
-                    <div className="flex justify-between">
-                      <motion.div
-                        animate={{ y: [0, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity, delay: 1 }}
-                        className="bg-white rounded-xl p-4 shadow-lg"
-                      >
-                        <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center mb-2">
-                          <Award className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="text-xs font-semibold text-gray-700">Mentors</div>
-                      </motion.div>
-                      
-                      <motion.div
-                        animate={{ y: [0, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity, delay: 1.5 }}
-                        className="bg-white rounded-xl p-4 shadow-lg"
-                      >
-                        <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mb-2">
-                          <Shield className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="text-xs font-semibold text-gray-700">Admins</div>
-                      </motion.div>
-                    </div>
+                    <p className="text-gray-600 font-semibold">Career Development Platform</p>
+                    <p className="text-sm text-gray-500 mt-2">Replace with your hero image</p>
                   </div>
                 </div>
-              </motion.div>
-              
-              {/* Floating Elements */}
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute -top-6 -right-6 w-12 h-12 bg-primary-500 rounded-full flex items-center justify-center shadow-lg"
-              >
-                <Sparkles className="w-6 h-6 text-white" />
-              </motion.div>
-              
-              <motion.div
-                animate={{ y: [0, -20, 0], rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity }}
-                className="absolute -bottom-6 -left-6 w-12 h-12 bg-secondary-500 rounded-full flex items-center justify-center shadow-lg"
-              >
-                <Target className="w-6 h-6 text-white" />
-              </motion.div>
+              </div>
             </motion.div>
           </div>
         </div>

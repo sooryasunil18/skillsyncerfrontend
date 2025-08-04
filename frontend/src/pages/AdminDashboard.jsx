@@ -71,10 +71,8 @@ const AdminDashboard = () => {
   const [mentorFormData, setMentorFormData] = useState({
     name: '',
     email: '',
-    password: '',
     expertise: '',
     experience: '',
-    bio: '',
     phone: '',
     location: ''
   });
@@ -217,9 +215,7 @@ const AdminDashboard = () => {
         body: JSON.stringify({
           name: mentorData.name,
           email: mentorData.email,
-          password: mentorData.password,
           mentorProfile: {
-            bio: mentorData.bio,
             expertise: mentorData.expertise ? [mentorData.expertise] : [],
             yearsOfExperience: mentorData.experience,
             location: mentorData.location,
@@ -233,17 +229,15 @@ const AdminDashboard = () => {
         setMentorFormData({
           name: '',
           email: '',
-          password: '',
           expertise: '',
           experience: '',
-          bio: '',
           phone: '',
           location: ''
         });
         fetchMentors(currentPage);
         
         // Show custom success popup
-        setSuccessMessage('Mentor added successfully! Username & password will be mailed shortly.');
+        setSuccessMessage('Mentor added successfully! Login credentials have been auto-generated and sent via email.');
         setShowSuccessPopup(true);
       } else {
         alert(data.message || 'Error adding mentor');
@@ -319,7 +313,7 @@ const AdminDashboard = () => {
 
   const handleMentorFormSubmit = (e) => {
     e.preventDefault();
-    if (!mentorFormData.name || !mentorFormData.email || !mentorFormData.password || !mentorFormData.expertise) {
+    if (!mentorFormData.name || !mentorFormData.email || !mentorFormData.expertise || !mentorFormData.phone) {
       alert('Please fill in all required fields');
       return;
     }
@@ -1545,19 +1539,7 @@ const AdminDashboard = () => {
                           />
                         </div>
                         
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Password *
-                          </label>
-                          <input
-                            type="password"
-                            value={mentorFormData.password}
-                            onChange={(e) => handleMentorFormChange('password', e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                            placeholder="Enter password"
-                            required
-                          />
-                        </div>
+
                         
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1617,18 +1599,7 @@ const AdminDashboard = () => {
                         />
                       </div>
                       
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Bio
-                        </label>
-                        <textarea
-                          value={mentorFormData.bio}
-                          onChange={(e) => handleMentorFormChange('bio', e.target.value)}
-                          rows={4}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                          placeholder="Enter mentor's bio and background"
-                        />
-                      </div>
+
                       
                       <div className="flex items-center justify-end space-x-4 pt-4">
                         <button
@@ -1709,10 +1680,14 @@ const AdminDashboard = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{mentor.profile?.expertise || 'Not specified'}</div>
+                            <div className="text-sm text-gray-900">
+                              {mentor.mentorProfile?.expertise && mentor.mentorProfile.expertise.length > 0 
+                                ? mentor.mentorProfile.expertise.join(', ') 
+                                : 'Not specified'}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{mentor.profile?.experience || 'Not specified'}</div>
+                            <div className="text-sm text-gray-900">{mentor.mentorProfile?.yearsOfExperience || 'Not specified'}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
