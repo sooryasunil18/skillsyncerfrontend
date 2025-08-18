@@ -21,26 +21,23 @@ const createAdminUser = async () => {
       console.log('Admin user already exists');
       
       // Update the existing user to ensure it has admin role and correct password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(adminPassword, salt);
-      
-      existingAdmin.password = hashedPassword;
+      existingAdmin.password = adminPassword; // Plain text - will be hashed by middleware
       existingAdmin.role = 'admin';
       existingAdmin.name = adminName;
+      existingAdmin.isEmailVerified = true;
+      existingAdmin.isActive = true;
       await existingAdmin.save();
       
       console.log('Admin user updated successfully');
     } else {
       // Create new admin user
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(adminPassword, salt);
-
       const adminUser = new User({
         name: adminName,
         email: adminEmail,
-        password: hashedPassword,
+        password: adminPassword, // Plain text - will be hashed by middleware
         role: 'admin',
-        isVerified: true,
+        isEmailVerified: true,
+        isActive: true,
         profile: {
           bio: 'System Administrator',
           location: 'System',

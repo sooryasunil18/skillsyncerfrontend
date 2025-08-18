@@ -166,16 +166,12 @@ router.post('/mentors', [protect, adminAuth], async (req, res) => {
 
     // Send credentials email to mentor
     try {
-      const emailResult = await sendMentorCredentials({
-        name,
-        email,
-        password: plainPassword // Send the plain password before it gets hashed
-      });
+      const emailResult = await sendMentorCredentials(email, name, plainPassword);
       
-      if (emailResult.success) {
+      if (emailResult) {
         console.log('Mentor credentials email sent successfully');
       } else {
-        console.error('Failed to send mentor credentials email:', emailResult.error);
+        console.error('Failed to send mentor credentials email');
       }
     } catch (emailError) {
       console.error('Error sending mentor credentials email:', emailError);

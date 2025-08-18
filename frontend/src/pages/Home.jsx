@@ -80,9 +80,8 @@ const Home = () => {
               </h1>
               
               <p className="text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                Skillsyncer is the ultimate AI-powered platform connecting students, employers, 
-                mentors, and admins. Find internships, projects, and mentorship opportunities 
-                that match your skills perfectly.
+                Skillsyncer is the ultimate AI-powered platform connecting students, employers,
+                and mentors. Find internships, projects,and mentorship opportunities that match your skills perfectly.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">

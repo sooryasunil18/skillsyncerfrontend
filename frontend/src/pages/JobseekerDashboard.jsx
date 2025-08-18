@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { dashboardApi } from '../utils/api';
-import EnhancedJobseekerProfile from '../components/EnhancedJobseekerProfile';
-import {
-  BasicInfoSection,
-  QualificationsSection,
-  JobPreferencesSection,
-  ProfilePreview
-} from '../components/ProfileFormSections';
+import { dashboardApi, apiRequest } from '../utils/api';
+import JobseekerProfileManager from '../components/JobseekerProfileManager';
 import {
   User,
   Settings,
@@ -72,49 +66,32 @@ const JobseekerDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
-  const [showEnhancedProfile, setShowEnhancedProfile] = useState(false);
+  
+  const [showProfileManager, setShowProfileManager] = useState(false);
 
-  // Profile form state
-  const [profileActiveSection, setProfileActiveSection] = useState('basic');
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null); // 'success', 'error', null
+  // Minimal profile state kept for dashboard widgets and helpers
   const [profileData, setProfileData] = useState({
-    // Basic Information
     name: '',
     email: '',
     phone: '',
     location: '',
     resume: null,
-
-    // Education
     education: [],
-
-    // Skills
     skills: [],
-
-    // Work Experience
     workExperience: [],
-
-    // Certifications
     certifications: [],
-
-    // Job Preferences
     jobTitles: [],
     jobTypes: [],
     workSchedule: [],
     minimumBasePay: '',
     relocationPreferences: [],
     remotePreferences: '',
-
-    // Ready to work
     readyToWork: false
   });
-
-  const [newSkill, setNewSkill] = useState('');
-  const [newJobTitle, setNewJobTitle] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
 
   // Profile form options
   const jobTypeOptions = [
@@ -141,201 +118,7 @@ const JobseekerDashboard = () => {
     'In-person'
   ];
 
-  // Load last saved time from localStorage
-  useEffect(() => {
-    const savedTime = localStorage.getItem('profileLastSaved');
-    if (savedTime) {
-      setLastSaved(new Date(savedTime));
-    }
-  }, []);
-
-  // Track changes
-  useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [profileData]);
-
-  // Profile form handlers
-  const handleInputChange = (field, value) => {
-    setProfileData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleArrayAdd = (field, value) => {
-    if (value.trim()) {
-      setProfileData(prev => ({
-        ...prev,
-        [field]: [...prev[field], value.trim()]
-      }));
-    }
-  };
-
-  const handleArrayRemove = (field, index) => {
-    setProfileData(prev => ({
-      ...prev,
-      [field]: prev[field].filter((_, i) => i !== index)
-    }));
-  };
-
-  const addEducation = () => {
-    setProfileData(prev => ({
-      ...prev,
-      education: [...prev.education, {
-        id: Date.now(),
-        degree: '',
-        institution: '',
-        year: '',
-        field: ''
-      }]
-    }));
-  };
-
-  const updateEducation = (id, field, value) => {
-    setProfileData(prev => ({
-      ...prev,
-      education: prev.education.map(edu =>
-        edu.id === id ? { ...edu, [field]: value } : edu
-      )
-    }));
-  };
-
-  const removeEducation = (id) => {
-    setProfileData(prev => ({
-      ...prev,
-      education: prev.education.filter(edu => edu.id !== id)
-    }));
-  };
-
-  const addWorkExperience = () => {
-    setProfileData(prev => ({
-      ...prev,
-      workExperience: [...prev.workExperience, {
-        id: Date.now(),
-        title: '',
-        company: '',
-        startDate: '',
-        endDate: '',
-        current: false,
-        description: ''
-      }]
-    }));
-  };
-
-  const updateWorkExperience = (id, field, value) => {
-    setProfileData(prev => ({
-      ...prev,
-      workExperience: prev.workExperience.map(exp =>
-        exp.id === id ? { ...exp, [field]: value } : exp
-      )
-    }));
-  };
-
-  const removeWorkExperience = (id) => {
-    setProfileData(prev => ({
-      ...prev,
-      workExperience: prev.workExperience.filter(exp => exp.id !== id)
-    }));
-  };
-
-  const addCertification = () => {
-    setProfileData(prev => ({
-      ...prev,
-      certifications: [...prev.certifications, {
-        id: Date.now(),
-        name: '',
-        issuer: '',
-        date: '',
-        expiryDate: '',
-        credentialId: ''
-      }]
-    }));
-  };
-
-  const updateCertification = (id, field, value) => {
-    setProfileData(prev => ({
-      ...prev,
-      certifications: prev.certifications.map(cert =>
-        cert.id === id ? { ...cert, [field]: value } : cert
-      )
-    }));
-  };
-
-  const removeCertification = (id) => {
-    setProfileData(prev => ({
-      ...prev,
-      certifications: prev.certifications.filter(cert => cert.id !== id)
-    }));
-  };
-
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    setSaveStatus(null);
-
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await fetch('/api/jobseeker/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: profileData.name,
-          profile: {
-            phone: profileData.phone,
-            location: profileData.location,
-            resume: profileData.resume,
-            education: profileData.education,
-            skills: profileData.skills,
-            workExperience: profileData.workExperience,
-            certifications: profileData.certifications,
-            jobTitles: profileData.jobTitles,
-            jobTypes: profileData.jobTypes,
-            workSchedule: profileData.workSchedule,
-            minimumBasePay: profileData.minimumBasePay,
-            relocationPreferences: profileData.relocationPreferences,
-            remotePreferences: profileData.remotePreferences,
-            readyToWork: profileData.readyToWork
-          }
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Update user data with the response
-        setUser(result.data.user);
-        setDashboardData(prev => ({
-          ...prev,
-          profile: result.data.user
-        }));
-
-        const now = new Date();
-        setLastSaved(now);
-        localStorage.setItem('profileLastSaved', now.toISOString());
-        setHasUnsavedChanges(false);
-        setSaveStatus('success');
-
-        // Refresh dashboard data to get updated quick actions
-        fetchDashboardData();
-
-        setTimeout(() => setSaveStatus(null), 3000);
-      } else {
-        throw new Error(result.message || 'Failed to save profile');
-      }
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus(null), 3000);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  // Removed legacy in-dashboard profile editing logic
 
   useEffect(() => {
     fetchDashboardData();
@@ -359,28 +142,54 @@ const JobseekerDashboard = () => {
       const result = await dashboardApi.getJobseekerDashboard();
 
       if (result.success) {
-        setDashboardData(result.data);
-        setUser(result.data.profile);
+        // apiRequest wraps backend response in { success, data }
+        // and backend also returns { success, data: dashboardData }
+        const payload = result?.data?.data || result?.data;
+
+        setDashboardData(payload);
+
+        const apiProf = payload?.profile || {};
+        let prof = apiProf;
+        // Supplement with /api/jobseeker/profile user data if any core fields are missing
+        try {
+          if (!apiProf?.name || !apiProf?.email) {
+            const meRes = await apiRequest('/api/jobseeker/profile', { method: 'GET' });
+            const userDoc = meRes?.success ? (meRes?.data?.data?.user || meRes?.data?.user) : null;
+            if (userDoc) {
+              prof = {
+                ...apiProf,
+                name: apiProf.name || userDoc.name,
+                email: apiProf.email || userDoc.email,
+                phone: apiProf.phone || userDoc.profile?.phone,
+                location: apiProf.location || userDoc.profile?.location,
+                skills: Array.isArray(apiProf.skills) && apiProf.skills.length ? apiProf.skills : (userDoc.profile?.skills || []),
+                bio: apiProf.bio || userDoc.profile?.bio,
+                experience: apiProf.experience || userDoc.profile?.experience,
+              };
+            }
+          }
+        } catch (_) { /* non-blocking enrichment */ }
+        setUser(prof ? { ...prof, name: prof.name || (localStorage.getItem('userName') || ''), email: prof.email || (localStorage.getItem('userEmail') || '') } : null);
         
         // Populate profile form with actual data
-        if (result.data.profile) {
+        if (prof) {
           setProfileData({
-            name: result.data.profile.name || '',
-            email: result.data.profile.email || '',
-            phone: result.data.profile.phone || '',
-            location: result.data.profile.location || '',
-            resume: result.data.profile.resume || null,
-            education: result.data.profile.education || [],
-            skills: result.data.profile.skills || [],
-            workExperience: result.data.profile.workExperience || [],
-            certifications: result.data.profile.certifications || [],
-            jobTitles: result.data.profile.jobTitles || [],
-            jobTypes: result.data.profile.jobTypes || [],
-            workSchedule: result.data.profile.workSchedule || [],
-            minimumBasePay: result.data.profile.minimumBasePay || '',
-            relocationPreferences: result.data.profile.relocationPreferences || [],
-            remotePreferences: result.data.profile.remotePreferences || '',
-            readyToWork: result.data.profile.readyToWork || false
+            name: prof.name || (localStorage.getItem('userName') || ''),
+            email: prof.email || (localStorage.getItem('userEmail') || ''),
+            phone: prof.phone || '',
+            location: prof.location || '',
+            resume: prof.resume || null,
+            education: prof.education || [],
+            skills: prof.skills || [],
+            workExperience: prof.workExperience || [],
+            certifications: prof.certifications || [],
+            jobTitles: prof.jobTitles || [],
+            jobTypes: prof.jobTypes || [],
+            workSchedule: prof.workSchedule || [],
+            minimumBasePay: prof.minimumBasePay || '',
+            relocationPreferences: prof.relocationPreferences || [],
+            remotePreferences: prof.remotePreferences || '',
+            readyToWork: prof.readyToWork || false
           });
         }
         
@@ -474,209 +283,35 @@ const JobseekerDashboard = () => {
   const renderSectionContent = () => {
     switch (activeSection) {
       case 'profile':
-        const sectionTabs = [
-          { id: 'basic', name: 'Basic Info', icon: User },
-          { id: 'qualifications', name: 'Qualifications', icon: GraduationCap },
-          { id: 'preferences', name: 'Job Preferences', icon: Target },
-          { id: 'view', name: 'View Profile', icon: Eye }
-        ];
-
         return (
           <div className="space-y-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20"
+              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">
-                      {isPreviewMode ? 'Profile Preview' : 'Complete Your Profile'}
-                    </h2>
-                    <div className="flex items-center space-x-4 mt-2">
-                      <p className="text-blue-100">
-                        {isPreviewMode ? 'Review your profile information' : 'Help employers find you with a complete profile'}
-                      </p>
-                      {lastSaved && (
-                        <div className="flex items-center space-x-1 text-blue-100 text-sm">
-                          <Clock className="w-4 h-4" />
-                          <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={() => setIsPreviewMode(!isPreviewMode)}
-                      className="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-                    >
-                      {isPreviewMode ? <Edit className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      <span>{isPreviewMode ? 'Edit' : 'Preview'}</span>
-                    </button>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Manage Your Profile</h2>
+                  <p className="text-gray-600 mt-1">Open the profile manager to view, edit, and upload your resume.</p>
                 </div>
-              </div>
-
-              {/* Navigation Tabs - Only show in edit mode */}
-              {!isPreviewMode && (
-                <div className="border-b border-gray-200 bg-gray-50">
-                  <div className="flex space-x-0">
-                    {sectionTabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setProfileActiveSection(tab.id)}
-                        className={`flex-1 flex items-center justify-center space-x-2 py-4 px-6 font-medium transition-colors ${
-                          profileActiveSection === tab.id
-                            ? 'bg-white text-blue-600 border-b-2 border-blue-600'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                        }`}
-                      >
-                        <tab.icon className="w-5 h-5" />
-                        <span>{tab.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
-                <AnimatePresence mode="wait">
-                  {isPreviewMode ? (
-                    <ProfilePreview
-                      profileData={profileData}
-                      onEdit={(section) => {
-                        setIsPreviewMode(false);
-                        setProfileActiveSection(section);
-                      }}
-                    />
-                  ) : (
-                    <>
-                      {profileActiveSection === 'basic' && (
-                        <BasicInfoSection
-                          profileData={profileData}
-                          handleInputChange={handleInputChange}
-                        />
-                      )}
-
-                      {profileActiveSection === 'qualifications' && (
-                        <QualificationsSection
-                          profileData={profileData}
-                          newSkill={newSkill}
-                          setNewSkill={setNewSkill}
-                          handleArrayAdd={handleArrayAdd}
-                          handleArrayRemove={handleArrayRemove}
-                          addEducation={addEducation}
-                          updateEducation={updateEducation}
-                          removeEducation={removeEducation}
-                          addWorkExperience={addWorkExperience}
-                          updateWorkExperience={updateWorkExperience}
-                          removeWorkExperience={removeWorkExperience}
-                          addCertification={addCertification}
-                          updateCertification={updateCertification}
-                          removeCertification={removeCertification}
-                        />
-                      )}
-
-                      {profileActiveSection === 'preferences' && (
-                        <JobPreferencesSection
-                          profileData={profileData}
-                          newJobTitle={newJobTitle}
-                          setNewJobTitle={setNewJobTitle}
-                          handleArrayAdd={handleArrayAdd}
-                          handleArrayRemove={handleArrayRemove}
-                          handleInputChange={handleInputChange}
-                          jobTypeOptions={jobTypeOptions}
-                          workScheduleOptions={workScheduleOptions}
-                          remoteOptions={remoteOptions}
-                        />
-                      )}
-
-                      {profileActiveSection === 'view' && (
-                        <ProfilePreview
-                          profileData={profileData}
-                          onEdit={null}
-                        />
-                      )}
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-gray-200 p-6 bg-gray-50 rounded-b-2xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    {/* Ready to work checkbox */}
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="ready-to-work"
-                        checked={profileData.readyToWork}
-                        onChange={(e) => handleInputChange('readyToWork', e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <label htmlFor="ready-to-work" className="text-sm font-medium text-gray-700">
-                        I'm ready to work immediately
-                      </label>
-                    </div>
-
-                    {/* Unsaved changes indicator */}
-                    {hasUnsavedChanges && (
-                      <div className="flex items-center space-x-1 text-amber-600 text-sm">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>Unsaved changes</span>
-                      </div>
-                    )}
-
-                    {/* Save status */}
-                    {saveStatus === 'success' && (
-                      <div className="flex items-center space-x-1 text-green-600 text-sm">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Profile saved successfully!</span>
-                      </div>
-                    )}
-
-                    {saveStatus === 'error' && (
-                      <div className="flex items-center space-x-1 text-red-600 text-sm">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>Error saving profile. Please try again.</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    {!isPreviewMode && (
-                      <button
-                        onClick={() => setIsPreviewMode(true)}
-                        className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>Preview</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={handleSaveProfile}
-                      disabled={isSaving}
-                      className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
-                        isSaving
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      {isSaving ? (
-                        <Loader className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Save className="w-4 h-4" />
-                      )}
-                      <span>{isSaving ? 'Saving...' : 'Update Profile'}</span>
-                    </button>
-                  </div>
-                </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    // Ensure userId is set for Profile Manager API calls
+                    const uid = localStorage.getItem('userId');
+                    if (!uid && dashboardData?.profile?._id) {
+                      try {
+                        localStorage.setItem('userId', dashboardData.profile._id);
+                      } catch (_) {}
+                    }
+                    setShowProfileManager(true);
+                  }}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg transition-all duration-200"
+                >
+                  Open Profile Manager
+                </motion.button>
               </div>
             </motion.div>
           </div>
@@ -1329,14 +964,17 @@ const JobseekerDashboard = () => {
                   </div>
                 </div>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowEnhancedProfile(true)}
-                className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white px-6 py-3 rounded-xl font-medium shadow-lg transition-all duration-200"
-              >
-                Complete Now
-              </motion.button>
+              <div className="flex space-x-3">
+                
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowProfileManager(true)}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg transition-all duration-200"
+                >
+                  Manage Profile
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -1484,9 +1122,19 @@ const JobseekerDashboard = () => {
                   <User className="w-5 h-5 mr-2 text-blue-600" />
                   Profile Overview
                 </h2>
-                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                  Active
-                </span>
+                <div className="flex items-center space-x-3">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
+                    {dashboardData?.profile?.completionPercentage || 0}% Complete
+                  </span>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowProfileManager(true)}
+                    className="hidden sm:inline-flex bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg font-medium shadow-md"
+                  >
+                    Manage Profile
+                  </motion.button>
+                </div>
               </div>
             </div>
             <div className="p-6">
@@ -1495,28 +1143,49 @@ const JobseekerDashboard = () => {
                   <User className="h-10 w-10 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold text-gray-900">{user?.name || localStorage.getItem('userName') || 'User'}</h3>
-                  <p className="text-gray-600 flex items-center mt-1">
-                    <Mail className="w-4 h-4 mr-2" />
-                    {user?.email || localStorage.getItem('userEmail') || 'user@example.com'}
-                  </p>
-                  {user?.phone && (
-                    <p className="text-gray-600 flex items-center mt-1">
-                      <Phone className="w-4 h-4 mr-2" />
-                      {user.phone}
-                    </p>
-                  )}
-                  {user?.location && (
-                    <p className="text-gray-600 flex items-center mt-1">
-                      <MapPin className="w-4 h-4 mr-2" />
-                      {user.location}
-                    </p>
-                  )}
-                  
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900">{user?.name || localStorage.getItem('userName') || 'User'}</h3>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">
+                          <Mail className="w-4 h-4 mr-1.5" /> {user?.email || localStorage.getItem('userEmail') || 'user@example.com'}
+                        </span>
+                        {user?.phone && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">
+                            <Phone className="w-4 h-4 mr-1.5" /> {user.phone}
+                          </span>
+                        )}
+                        {user?.location && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">
+                            <MapPin className="w-4 h-4 mr-1.5" /> {user.location}
+                          </span>
+                        )}
+                        {user?.resume && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
+                            <FileText className="w-4 h-4 mr-1.5" /> Resume uploaded
+                          </span>
+                        )}
+                        {user?.readyToWork && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm">
+                            <Briefcase className="w-4 h-4 mr-1.5" /> Ready to work
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowProfileManager(true)}
+                      className="mt-4 sm:mt-0 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium shadow hover:bg-blue-700"
+                    >
+                      Update Profile
+                    </motion.button>
+                  </div>
+
                   {user?.bio && (
-                    <p className="text-gray-700 mt-3 p-3 bg-gray-50 rounded-lg">{user.bio}</p>
+                    <p className="text-gray-700 mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-100">{user.bio}</p>
                   )}
-                  
+
                   {/* Skills Section */}
                   <div className="mt-6">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
@@ -1524,42 +1193,66 @@ const JobseekerDashboard = () => {
                       Skills & Expertise
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {user?.skills?.length > 0 ? (
-                        user.skills.map((skill, index) => (
-                          <span
-                            key={index}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 rounded-full text-sm font-medium border border-blue-200 hover:shadow-md transition-all duration-200"
-                          >
-                            {skill}
-                          </span>
-                        ))
+                      {Array.isArray(user?.skills) && user.skills.length > 0 ? (
+                        (() => {
+                          const maxToShow = 10;
+                          const shown = user.skills.slice(0, maxToShow);
+                          const remaining = user.skills.length - shown.length;
+                          return (
+                            <>
+                              {shown.map((skill, index) => (
+                                <span
+                                  key={index}
+                                  className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 rounded-full text-sm font-medium border border-blue-200"
+                                >
+                                  {skill}
+                                </span>
+                              ))}
+                              {remaining > 0 && (
+                                <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm font-medium border border-gray-200">
+                                  +{remaining} more
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()
                       ) : (
                         <span className="text-gray-500 text-sm italic">No skills added yet - Add skills to improve your profile!</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Additional Info */}
-                  <div className="mt-6 grid grid-cols-2 gap-6">
-                    <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
-                      <div className="flex items-center">
-                        <Briefcase className="w-5 h-5 text-blue-600 mr-2" />
-                        <span className="font-medium text-gray-700">Experience</span>
+                  {/* Education Section */}
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                      <GraduationCap className="w-4 h-4 mr-2" />
+                      Education
+                    </h4>
+                    {Array.isArray(user?.education) && user.education.length > 0 ? (
+                      <div className="space-y-2">
+                        {user.education.map((edu, idx) => {
+                          const isObj = edu && typeof edu === 'object';
+                          const degree = isObj ? (edu.degree || '') : String(edu);
+                          const specialization = isObj ? (edu.specialization || '') : '';
+                          const institution = isObj ? (edu.institution || '') : '';
+                          const year = isObj ? (edu.year || '') : '';
+                          return (
+                            <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                              <div className="font-medium text-gray-900">
+                                {degree}{specialization ? ` • ${specialization}` : ''}
+                              </div>
+                              {(institution || year) && (
+                                <div className="text-sm text-gray-600">{institution}{institution && year ? ' • ' : ''}{year}</div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <p className="text-gray-600 mt-1">
-                        {user?.experience || 'Not specified'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
-                      <div className="flex items-center">
-                        <GraduationCap className="w-5 h-5 text-green-600 mr-2" />
-                        <span className="font-medium text-gray-700">Education</span>
-                      </div>
-                      <p className="text-gray-600 mt-1">
-                        {user?.education || 'Not specified'}
-                      </p>
-                    </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm italic">Not specified</p>
+                    )}
                   </div>
+
                 </div>
               </div>
             </div>
@@ -1739,10 +1432,12 @@ const JobseekerDashboard = () => {
         )}
       </div>
 
-      {/* Enhanced Profile Modal */}
-      {showEnhancedProfile && (
-        <EnhancedJobseekerProfile
-          onClose={() => setShowEnhancedProfile(false)}
+      
+
+      {/* Jobseeker Profile Manager Modal */}
+      {showProfileManager && (
+        <JobseekerProfileManager
+          onClose={() => setShowProfileManager(false)}
           initialData={dashboardData?.profile || {}}
         />
       )}

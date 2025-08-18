@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
+const admin = require('firebase-admin');
 
 const router = express.Router();
 
@@ -34,6 +35,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // Name validation
     if (!name.trim() || name.trim().length < 2) {
       return res.status(400).json({
         success: false,
@@ -41,10 +43,57 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    if (name.trim().length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name cannot exceed 50 characters'
+      });
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(name.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name can only contain letters and spaces'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Password validation
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    if (!/(?=.*[a-z])(?=.*[A-Z])/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain both uppercase and lowercase letters'
+      });
+    }
+
+    if (!/(?=.*\d)/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain at least one number'
+      });
+    }
+
+    // Role validation
+    const validRoles = ['jobseeker', 'employer', 'mentor'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role selected'
       });
     }
 
@@ -138,6 +187,7 @@ router.post('/register-company', async (req, res) => {
       });
     }
 
+    // Company name validation
     if (!companyName.trim() || companyName.trim().length < 2) {
       return res.status(400).json({
         success: false,
@@ -145,10 +195,59 @@ router.post('/register-company', async (req, res) => {
       });
     }
 
+    if (companyName.trim().length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Company name cannot exceed 100 characters'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Phone validation
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number must be exactly 10 digits starting with 6, 7, 8, or 9'
+      });
+    }
+
+    // Industry validation
+    const validIndustries = ['technology', 'healthcare', 'finance', 'education', 'retail', 'manufacturing', 'consulting', 'media', 'real-estate', 'transportation', 'other'];
+    if (!validIndustries.includes(industry)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a valid industry'
+      });
+    }
+
+    // Password validation
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    if (!/(?=.*[a-z])(?=.*[A-Z])/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain both uppercase and lowercase letters'
+      });
+    }
+
+    if (!/(?=.*\d)/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain at least one number'
       });
     }
 
@@ -442,6 +541,125 @@ router.put('/change-password', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while changing password'
+    });
+  }
+});
+
+// @desc    Google Sign-in for jobseekers
+// @route   POST /api/auth/google-signin
+// @access  Public
+router.post('/google-signin', async (req, res) => {
+  try {
+    const { uid, email, name, photoURL, role } = req.body;
+
+    console.log('Google sign-in attempt:', { uid, email, name, role });
+
+    // Validation
+    if (!uid || !email || !name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required Google user data'
+      });
+    }
+
+    // Only allow jobseekers for Google sign-in
+    if (role !== 'jobseeker') {
+      return res.status(400).json({
+        success: false,
+        message: 'Google sign-in is only available for job seekers'
+      });
+    }
+
+    // Check if user already exists
+    let user = await User.findOne({ email });
+
+    if (user) {
+      // User exists - sign them in
+      if (!user.isActive) {
+        return res.status(401).json({
+          success: false,
+          message: 'Account is deactivated. Please contact support.'
+        });
+      }
+
+      // Update Google-specific fields if they don't exist
+      if (!user.googleId) {
+        user.googleId = uid;
+      }
+      if (!user.profile.avatar && photoURL) {
+        user.profile.avatar = photoURL;
+      }
+
+      // Update last login
+      await user.updateLastLogin();
+      await user.save();
+
+    } else {
+      // Create new user with Google data
+      user = await User.create({
+        name,
+        email,
+        googleId: uid,
+        role: 'jobseeker',
+        isEmailVerified: true, // Google emails are pre-verified
+        profile: {
+          avatar: photoURL || '',
+          bio: '',
+          skills: [],
+          experience: 'fresher', // Default experience level
+          location: '',
+          phone: '',
+          resume: '',
+          portfolio: ''
+        }
+      });
+
+      // Calculate initial profile completion
+      user.calculateProfileCompletion();
+      await user.save();
+    }
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    // Get user without password
+    const userResponse = await User.findById(user._id).select('-password');
+
+    res.json({
+      success: true,
+      message: user.googleId === uid ? 'Google sign-in successful' : 'Account created and signed in successfully',
+      data: {
+        user: userResponse,
+        token,
+        profileCompletion: userResponse.profileCompletion
+      }
+    });
+
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    
+    // Handle duplicate email error
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'An account with this email already exists'
+      });
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      console.log('Validation errors:', errors);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation Error',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error during Google sign-in'
     });
   }
 });

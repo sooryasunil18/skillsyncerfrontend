@@ -44,6 +44,13 @@ export const apiRequest = async (endpoint, options = {}) => {
     ...options,
   };
 
+  // If sending FormData, let the browser set the correct multipart boundary
+  if (options.isFormData || (typeof FormData !== 'undefined' && defaultOptions.body instanceof FormData)) {
+    if (defaultOptions.headers && defaultOptions.headers['Content-Type']) {
+      delete defaultOptions.headers['Content-Type'];
+    }
+  }
+
   // Add auth token if available
   const token = localStorage.getItem('token');
   if (token) {

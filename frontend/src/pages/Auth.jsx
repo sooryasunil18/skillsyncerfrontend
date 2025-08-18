@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../config/firebase';
 import {
   Users,
   Eye,
@@ -113,13 +115,20 @@ const Auth = () => {
       if (!isLogin && !isCompanyRegistration) {
         // Regular user registration validation
         if (!formData.fullName.trim()) {
-          setError('Name is required');
+          setError('Full name is required');
           setLoading(false);
           return;
         }
         
         if (formData.fullName.trim().length < 2) {
           setError('Name must be at least 2 characters long');
+          setLoading(false);
+          return;
+        }
+
+        // Name should only contain letters and spaces
+        if (!/^[a-zA-Z\s]+$/.test(formData.fullName.trim())) {
+          setError('Name can only contain letters and spaces');
           setLoading(false);
           return;
         }
@@ -136,6 +145,26 @@ const Auth = () => {
           setLoading(false);
           return;
         }
+
+        // Password validation
+        if (formData.password.length < 6) {
+          setError('Password must be at least 6 characters long');
+          setLoading(false);
+          return;
+        }
+
+        if (!/(?=.*[a-z])(?=.*[A-Z])/.test(formData.password)) {
+          setError('Password must contain both uppercase and lowercase letters');
+          setLoading(false);
+          return;
+        }
+
+        if (!/(?=.*\d)/.test(formData.password)) {
+          setError('Password must contain at least one number');
+          setLoading(false);
+          return;
+        }
+        
         if (formData.password !== formData.confirmPassword) {
           setError('Passwords do not match');
           setLoading(false);
@@ -145,6 +174,12 @@ const Auth = () => {
         // Company registration validation
         if (!formData.companyName.trim()) {
           setError('Company name is required');
+          setLoading(false);
+          return;
+        }
+
+        if (formData.companyName.trim().length < 2) {
+          setError('Company name must be at least 2 characters long');
           setLoading(false);
           return;
         }
@@ -160,20 +195,42 @@ const Auth = () => {
           setLoading(false);
           return;
         }
+
+        // Phone number validation
+        const cleanPhone = formData.companyPhone.replace(/\D/g, '');
+        if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+          setError('Phone number must be exactly 10 digits starting with 6, 7, 8, or 9');
+          setLoading(false);
+          return;
+        }
         
         if (!formData.industry) {
           setError('Please select an industry');
           setLoading(false);
           return;
         }
-        
-        if (formData.password !== formData.confirmPassword) {
-          setError('Passwords do not match');
+
+        // Password validation for companies
+        if (formData.password.length < 6) {
+          setError('Password must be at least 6 characters long');
           setLoading(false);
           return;
         }
-        if (formData.password.length < 6) {
-          setError('Password must be at least 6 characters long');
+
+        if (!/(?=.*[a-z])(?=.*[A-Z])/.test(formData.password)) {
+          setError('Password must contain both uppercase and lowercase letters');
+          setLoading(false);
+          return;
+        }
+
+        if (!/(?=.*\d)/.test(formData.password)) {
+          setError('Password must contain at least one number');
+          setLoading(false);
+          return;
+        }
+        
+        if (formData.password !== formData.confirmPassword) {
+          setError('Passwords do not match');
           setLoading(false);
           return;
         }
@@ -224,6 +281,8 @@ const Auth = () => {
           localStorage.setItem('userRole', data.data.user.role);
           localStorage.setItem('userName', data.data.user.name || data.data.user.companyName);
           localStorage.setItem('userEmail', data.data.user.email);
+          // Persist userId for subsequent profile requests
+          localStorage.setItem('userId', data.data.user._id || data.data.user.id);
 
           // Redirect based on role
           if (data.data.user.role === 'jobseeker') {
@@ -286,6 +345,60 @@ const Auth = () => {
     } catch (error) {
       console.error('Auth error:', error);
       setError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google Sign-in function for jobseekers
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // Send user data to your backend
+      const response = await fetch('http://localhost:5001/api/auth/google-signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName,
+          photoURL: user.photoURL,
+          role: 'jobseeker' // Only for jobseekers
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Store token and user info
+        localStorage.setItem('token', data.data.token);
+        localStorage.setItem('userRole', data.data.user.role);
+        localStorage.setItem('userName', data.data.user.name);
+        localStorage.setItem('userEmail', data.data.user.email);
+        // Persist userId for jobseeker profile APIs
+        localStorage.setItem('userId', data.data.user._id || data.data.user.id);
+
+        // Redirect to jobseeker dashboard
+        navigate('/jobseeker-dashboard');
+      } else {
+        setError(data.message || 'Google sign-in failed');
+      }
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in was cancelled');
+      } else if (error.code === 'auth/popup-blocked') {
+        setError('Popup was blocked. Please allow popups for this site');
+      } else {
+        setError('Google sign-in failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -511,7 +624,7 @@ const Auth = () => {
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-6"
               >
-                <h2 className="text-2xl font-bold text-gray-900">Choose Your Role</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Choose Your Registration</h2>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {roles.map((role) => (
                     <motion.div
@@ -813,15 +926,8 @@ const Auth = () => {
                           >
                             <option value="">Select Industry</option>
                             <option value="technology">Technology</option>
-                            <option value="healthcare">Healthcare</option>
                             <option value="finance">Finance & Banking</option>
                             <option value="education">Education</option>
-                            <option value="retail">Retail & E-commerce</option>
-                            <option value="manufacturing">Manufacturing</option>
-                            <option value="consulting">Consulting</option>
-                            <option value="media">Media & Entertainment</option>
-                            <option value="real-estate">Real Estate</option>
-                            <option value="transportation">Transportation & Logistics</option>
                             <option value="other">Other</option>
                           </select>
                         </div>
@@ -988,12 +1094,58 @@ const Auth = () => {
                     )}
                   </motion.button>
 
+                  {/* Google Sign-in for Jobseekers */}
+                  {(isLogin || (!isLogin && !isCompanyRegistration && selectedRole === 'jobseeker')) && (
+                    <>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300" />
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                        </div>
+                      </div>
+
+                      <motion.button
+                        type="button"
+                        onClick={handleGoogleSignIn}
+                        disabled={loading}
+                        whileHover={{ scale: loading ? 1 : 1.02 }}
+                        whileTap={{ scale: loading ? 1 : 0.98 }}
+                        className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {loading ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 mr-3"></div>
+                        ) : (
+                          <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                            <path
+                              fill="#4285F4"
+                              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                            />
+                            <path
+                              fill="#34A853"
+                              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                            />
+                            <path
+                              fill="#FBBC05"
+                              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                            />
+                            <path
+                              fill="#EA4335"
+                              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                            />
+                          </svg>
+                        )}
+                        {loading ? 'Signing in...' : `${isLogin ? 'Sign in' : 'Sign up'} with Google`}
+                      </motion.button>
+                    </>
+                  )}
 
                 </motion.form>
               </AnimatePresence>
 
               {/* Social Login */}
-              <div className="mt-8">
+              {/* <div className="mt-8">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-300" />
@@ -1023,7 +1175,7 @@ const Auth = () => {
                     </svg>
                   </button>
                 </div>
-              </div>
+              </div> */}
             </div>
           </motion.div>
         </div>

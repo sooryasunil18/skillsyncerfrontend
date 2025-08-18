@@ -1,6 +1,12 @@
 const express = require('express');
+const multer = require('multer');
 const User = require('../models/User');
+const JobseekerProfile = require('../models/JobseekerProfile');
 const { protect, authorize } = require('../middleware/auth');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
+const { updateProfileATSScore, generateATSSuggestions } = require('../utils/atsScoring');
+const { extractText, extractEntities } = require('../utils/resumeParser');
+const { analyzeAndSaveNLP, computeNLPScore } = require('../utils/atsScoringNLP');
 
 const router = express.Router();
 
@@ -101,7 +107,19 @@ router.get('/dashboard', async (req, res) => {
         profilePicture: user.profile.profilePicture,
         socialLinks: user.profile.socialLinks || {},
         jobPreferences: user.profile.jobPreferences || {},
-        isProfilePublic: user.profile.isProfilePublic
+        isProfilePublic: user.profile.isProfilePublic,
+        // Extended profile fields
+        education: user.profile.education || [],
+        workExperience: user.profile.workExperience || [],
+        certifications: user.profile.certifications || [],
+        jobTitles: user.profile.jobTitles || [],
+        jobTypes: user.profile.jobTypes || [],
+        workSchedule: user.profile.workSchedule || [],
+        minimumBasePay: user.profile.minimumBasePay,
+        relocationPreferences: user.profile.relocationPreferences || [],
+        remotePreferences: user.profile.remotePreferences,
+        readyToWork: user.profile.readyToWork || false,
+        lastUpdated: user.profile.lastUpdated
       },
       quickActions: quickActions.slice(0, 4), // Show top 4 quick actions
       stats: {
@@ -166,6 +184,11 @@ router.get('/profile', async (req, res) => {
 // @access  Private (Jobseeker only)
 router.put('/profile', async (req, res) => {
   try {
+    console.log('📝 Profile update request received:');
+    console.log('   User ID:', req.user._id);
+    console.log('   Request body keys:', Object.keys(req.body));
+    console.log('   Profile data:', JSON.stringify(req.body, null, 2));
+    
     const user = await User.findById(req.user._id);
     
     if (!user) {
@@ -182,6 +205,7 @@ router.put('/profile', async (req, res) => {
 
     // Update profile fields
     if (profile) {
+      // Basic profile fields
       if (profile.bio !== undefined) user.profile.bio = profile.bio;
       if (profile.skills !== undefined) user.profile.skills = profile.skills;
       if (profile.experience !== undefined) user.profile.experience = profile.experience;
@@ -190,6 +214,18 @@ router.put('/profile', async (req, res) => {
       if (profile.resume !== undefined) user.profile.resume = profile.resume;
       if (profile.portfolio !== undefined) user.profile.portfolio = profile.portfolio;
       if (profile.profilePicture !== undefined) user.profile.profilePicture = profile.profilePicture;
+      
+      // Extended profile fields
+      if (profile.education !== undefined) user.profile.education = profile.education;
+      if (profile.workExperience !== undefined) user.profile.workExperience = profile.workExperience;
+      if (profile.certifications !== undefined) user.profile.certifications = profile.certifications;
+      if (profile.jobTitles !== undefined) user.profile.jobTitles = profile.jobTitles;
+      if (profile.jobTypes !== undefined) user.profile.jobTypes = profile.jobTypes;
+      if (profile.workSchedule !== undefined) user.profile.workSchedule = profile.workSchedule;
+      if (profile.minimumBasePay !== undefined) user.profile.minimumBasePay = profile.minimumBasePay;
+      if (profile.relocationPreferences !== undefined) user.profile.relocationPreferences = profile.relocationPreferences;
+      if (profile.remotePreferences !== undefined) user.profile.remotePreferences = profile.remotePreferences;
+      if (profile.readyToWork !== undefined) user.profile.readyToWork = profile.readyToWork;
       
       // Update social links
       if (profile.socialLinks !== undefined) {
@@ -216,14 +252,16 @@ router.put('/profile', async (req, res) => {
         }
       }
       
-      // Update profile visibility
+      // Update profile visibility and timestamp
       if (profile.isProfilePublic !== undefined) user.profile.isProfilePublic = profile.isProfilePublic;
+      user.profile.lastUpdated = new Date();
     }
 
     // Calculate and update profile completion
-    user.calculateProfileCompletion();
+    await user.calculateProfileCompletion();
     
-    await user.save();
+    // Save with validateModifiedOnly to avoid password validation during profile updates
+    await user.save({ validateModifiedOnly: true });
 
     const updatedUser = await User.findById(user._id).select('-password');
 
@@ -238,13 +276,24 @@ router.put('/profile', async (req, res) => {
 
   } catch (error) {
     console.error('Profile update error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message,
+        value: err.value
+      }));
+      console.error('Validation errors:', errors);
       return res.status(400).json({
         success: false,
         message: 'Validation Error',
-        errors
+        errors,
+        details: errors
       });
     }
 
@@ -551,6 +600,394 @@ router.patch('/profile/visibility', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while updating profile visibility'
+    });
+  }
+});
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow only PDF and DOC files
+    if (file.mimetype === 'application/pdf' || 
+        file.mimetype === 'application/msword' || 
+        file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF and DOC files are allowed'), false);
+    }
+  }
+});
+
+// @desc    Create jobseeker profile
+// @route   POST /api/jobseeker/profile
+// @access  Private (Jobseeker only)
+router.post('/profile', async (req, res) => {
+  try {
+    const {
+      education,
+      skills,
+      internshipTitle,
+      internshipType,
+      preferredLocation,
+      readyToWorkAfterInternship
+    } = req.body;
+
+    // Check if profile already exists
+    const existingProfile = await JobseekerProfile.findOne({ userId: req.user._id });
+    if (existingProfile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile already exists. Use PUT to update.'
+      });
+    }
+
+    // Validate required fields
+    if (!education || !Array.isArray(education) || education.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one education entry is required'
+      });
+    }
+
+    // Create new profile
+    const profile = new JobseekerProfile({
+      userId: req.user._id,
+      education,
+      skills: skills || [],
+      internshipTitle,
+      internshipType,
+      preferredLocation,
+      readyToWorkAfterInternship: readyToWorkAfterInternship || false
+    });
+
+    await profile.save();
+
+    // Calculate initial ATS score
+    const atsResult = await updateProfileATSScore(req.user._id);
+
+    // Update profile completion percentage in User model
+    const user = await User.findById(req.user._id);
+    if (user) {
+      await user.calculateProfileCompletion();
+      await user.save({ validateModifiedOnly: true });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Profile created successfully',
+      data: {
+        profile,
+        atsScore: atsResult.atsScore,
+        suggestions: atsResult.suggestions,
+        profileCompletion: user ? user.profileCompletion : 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Profile creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while creating profile'
+    });
+  }
+});
+
+// @desc    Get jobseeker profile
+// @route   GET /api/jobseeker/profile/:userId
+// @access  Private (Jobseeker only)
+router.get('/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Check if user is requesting their own profile or if profile is public
+    if (userId !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const profile = await JobseekerProfile.findOne({ userId }).populate('userId', 'name email phone');
+    
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found'
+      });
+    }
+
+    // Get user data
+    const user = await User.findById(userId).select('name email phone');
+    
+    // Combine user and profile data
+    const profileData = {
+      ...profile.toObject(),
+      user: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone
+      }
+    };
+
+    res.json({
+      success: true,
+      data: profileData
+    });
+
+  } catch (error) {
+    console.error('Profile fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching profile'
+    });
+  }
+});
+
+// @desc    Update jobseeker profile
+// @route   PUT /api/jobseeker/profile/:userId
+// @access  Private (Jobseeker only)
+router.put('/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const {
+      education,
+      skills,
+      internshipTitle,
+      internshipType,
+      preferredLocation,
+      readyToWorkAfterInternship
+    } = req.body;
+
+    // Check if user is updating their own profile
+    if (userId !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const profile = await JobseekerProfile.findOne({ userId });
+    
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found'
+      });
+    }
+
+    // Update profile fields
+    if (education) profile.education = education;
+    if (skills) profile.skills = skills;
+    if (internshipTitle !== undefined) profile.internshipTitle = internshipTitle;
+    if (internshipType) profile.internshipType = internshipType;
+    if (preferredLocation !== undefined) profile.preferredLocation = preferredLocation;
+    if (readyToWorkAfterInternship !== undefined) profile.readyToWorkAfterInternship = readyToWorkAfterInternship;
+
+    await profile.save();
+
+    // Update ATS score
+    const atsResult = await updateProfileATSScore(userId);
+
+    // Update profile completion percentage in User model
+    const user = await User.findById(userId);
+    if (user) {
+      await user.calculateProfileCompletion();
+      await user.save({ validateModifiedOnly: true });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        profile,
+        atsScore: atsResult.atsScore,
+        suggestions: atsResult.suggestions,
+        profileCompletion: user ? user.profileCompletion : 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating profile'
+    });
+  }
+});
+
+// @desc    Upload resume to Cloudinary
+// @route   POST /api/jobseeker/upload-resume
+// @access  Private (Jobseeker only)
+router.post('/upload-resume', upload.single('resume'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    // Upload to Cloudinary
+    const uploadResult = await uploadToCloudinary(
+      req.file.buffer,
+      'resumes',
+      `resume_${req.user._id}_${Date.now()}`
+    );
+
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to upload file to Cloudinary',
+        error: uploadResult.error
+      });
+    }
+
+    // Find or create profile
+    let profile = await JobseekerProfile.findOne({ userId: req.user._id });
+    
+    if (!profile) {
+      // Create basic profile if it doesn't exist
+      profile = new JobseekerProfile({
+        userId: req.user._id,
+        education: [],
+        skills: []
+      });
+    }
+
+    // Delete old resume if exists
+    if (profile.resumeUrl) {
+      const oldPublicId = profile.resumeUrl.split('/').pop().split('.')[0];
+      await deleteFromCloudinary(oldPublicId);
+    }
+
+    // Update profile with new resume URL
+    profile.resumeUrl = uploadResult.url;
+    await profile.save();
+
+    // Parse resume text and extract entities (OCR + NLP)
+    let parsedText = '';
+    try {
+      parsedText = await extractText(req.file.buffer, req.file.mimetype);
+    } catch (e) {
+      console.warn('Resume text extraction failed:', e.message);
+    }
+    const extracted = extractEntities(parsedText);
+
+    // Save NLP analysis and compute NLP ATS
+    const nlpResult = await analyzeAndSaveNLP(req.user._id, parsedText, extracted);
+
+    // Update rule-based ATS score for backward compatibility
+    const atsResult = await updateProfileATSScore(req.user._id);
+
+    // Update profile completion percentage in User model
+    const user = await User.findById(req.user._id);
+    if (user) {
+      await user.calculateProfileCompletion();
+      await user.save({ validateModifiedOnly: true });
+    }
+
+    res.json({
+      success: true,
+      message: 'Resume uploaded successfully',
+      data: {
+        resumeUrl: uploadResult.url,
+        atsScore: atsResult.atsScore,
+        atsNLP: nlpResult.success ? nlpResult.atsNLP : undefined,
+        suggestions: atsResult.suggestions,
+        profileCompletion: user ? user.profileCompletion : 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Resume upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while uploading resume'
+    });
+  }
+});
+
+// @desc    NLP ATS score (optionally against job description)
+// @route   POST /api/jobseeker/ats-nlp
+// @access  Private (Jobseeker only)
+router.post('/ats-nlp', async (req, res) => {
+  try {
+    const { jobDescription } = req.body || {};
+    const profile = await JobseekerProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Profile not found' });
+    }
+
+    const { score, details, suggestions } = await computeNLPScore(profile, jobDescription || '');
+    res.json({
+      success: true,
+      data: {
+        atsNLP: { score, details, suggestions },
+        lastAnalyzedAt: profile?.nlp?.lastAnalyzedAt || null
+      }
+    });
+  } catch (error) {
+    console.error('NLP ATS error:', error);
+    res.status(500).json({ success: false, message: 'Server error while computing NLP ATS' });
+  }
+});
+
+// @desc    Re-run NLP parsing on current resume file in Cloudinary (pull via URL not implemented here)
+//          Intended for cases where external NLP service changed.
+// @route   POST /api/jobseeker/reanalyze-nlp
+// @access  Private (Jobseeker only)
+router.post('/reanalyze-nlp', async (req, res) => {
+  try {
+    const profile = await JobseekerProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Profile not found' });
+    }
+    if (!profile.resumeUrl) {
+      return res.status(400).json({ success: false, message: 'No resume on file' });
+    }
+    // For simplicity, we do not re-download Cloudinary file here.
+    // Expect client to re-upload if text extraction needs refresh.
+    return res.status(200).json({ success: true, message: 'No-op. Please re-upload resume to re-parse.' });
+  } catch (error) {
+    console.error('Reanalyze NLP error:', error);
+    res.status(500).json({ success: false, message: 'Server error while reanalyzing NLP' });
+  }
+});
+
+// @desc    Get ATS score and suggestions
+// @route   GET /api/jobseeker/ats-score
+// @access  Private (Jobseeker only)
+router.get('/ats-score', async (req, res) => {
+  try {
+    const profile = await JobseekerProfile.findOne({ userId: req.user._id });
+    
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Profile not found'
+      });
+    }
+
+    const suggestions = generateATSSuggestions(profile);
+
+    res.json({
+      success: true,
+      data: {
+        atsScore: profile.atsScore,
+        suggestions,
+        profileCompletion: profile.profileCompletion
+      }
+    });
+
+  } catch (error) {
+    console.error('ATS score fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching ATS score'
     });
   }
 });

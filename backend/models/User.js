@@ -23,9 +23,17 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: function() {
+      // Password is not required for Google sign-in users
+      return !this.googleId;
+    },
     minlength: [6, 'Password must be at least 6 characters long'],
     select: false // Don't include password in queries by default
+  },
+  googleId: {
+    type: String,
+    sparse: true, // Allow multiple null values but unique non-null values
+    index: true
   },
   role: {
     type: String,
@@ -35,6 +43,10 @@ const userSchema = new mongoose.Schema({
   },
   // Jobseeker specific fields
   profile: {
+    avatar: {
+      type: String, // URL to profile picture
+      trim: true
+    },
     bio: {
       type: String,
       maxlength: [500, 'Bio cannot exceed 500 characters']
@@ -61,6 +73,86 @@ const userSchema = new mongoose.Schema({
     },
     portfolio: {
       type: String, // URL to portfolio
+    },
+    // Extended profile fields for detailed jobseeker profile
+    education: [{
+      id: { type: Number },
+      degree: { type: String },
+      institution: { type: String },
+      year: { type: String },
+      field: { type: String }
+    }],
+    workExperience: [{
+      id: { type: Number },
+      title: { type: String },
+      company: { type: String },
+      startDate: { type: String },
+      endDate: { type: String },
+      current: { type: Boolean },
+      description: { type: String }
+    }],
+    certifications: [{
+      id: { type: Number },
+      name: { type: String },
+      issuer: { type: String },
+      date: { type: String },
+      expiryDate: { type: String },
+      credentialId: { type: String }
+    }],
+    jobTitles: [{
+      type: String,
+      trim: true
+    }],
+    jobTypes: [{
+      type: String,
+      trim: true
+    }],
+    workSchedule: [{
+      type: String,
+      trim: true
+    }],
+    minimumBasePay: {
+      type: String,
+      trim: true
+    },
+    relocationPreferences: [{
+      type: String,
+      trim: true
+    }],
+    remotePreferences: {
+      type: String,
+      trim: true
+    },
+    readyToWork: {
+      type: Boolean,
+      default: false
+    },
+    // Social links
+    socialLinks: {
+      linkedin: { type: String },
+      github: { type: String },
+      twitter: { type: String },
+      website: { type: String }
+    },
+    // Job preferences
+    jobPreferences: {
+      jobType: { type: String },
+      workMode: { type: String },
+      availableFrom: { type: Date },
+      expectedSalary: {
+        min: { type: Number },
+        max: { type: Number },
+        currency: { type: String }
+      }
+    },
+    profilePicture: { type: String },
+    isProfilePublic: {
+      type: Boolean,
+      default: true
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now
     }
   },
   // Employer specific fields
@@ -146,7 +238,8 @@ const userSchema = new mongoose.Schema({
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  // Skip password hashing for Google sign-in users or if password is not modified
+  if (!this.isModified('password') || !this.password) return next();
   
   try {
     const salt = await bcrypt.genSalt(12);
@@ -163,7 +256,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
   // Calculate profile completion
-userSchema.methods.calculateProfileCompletion = function() {
+userSchema.methods.calculateProfileCompletion = async function() {
   let completion = 0;
   let totalFields = 0;
   
@@ -172,13 +265,35 @@ userSchema.methods.calculateProfileCompletion = function() {
   if (this.email) completion++;
   
   if (this.role === 'jobseeker') {
-    totalFields = 8;
+    totalFields = 12; // Total fields to check
+    
+    // Check basic profile fields in User model
     if (this.profile.bio) completion++;
-    if (this.profile.skills && this.profile.skills.length > 0) completion++;
-    if (this.profile.experience) completion++;
     if (this.profile.location) completion++;
     if (this.profile.phone) completion++;
-    if (this.profile.resume) completion++;
+    
+    // Check for JobseekerProfile data
+    const JobseekerProfile = mongoose.model('JobseekerProfile');
+    const extendedProfile = await JobseekerProfile.findOne({ userId: this._id });
+    
+    if (extendedProfile) {
+      // Check extended profile fields
+      if (extendedProfile.skills && extendedProfile.skills.length > 0) completion++;
+      if (extendedProfile.education && extendedProfile.education.length > 0) completion++;
+      if (extendedProfile.resumeUrl) completion++;
+      if (extendedProfile.internshipTitle) completion++;
+      if (extendedProfile.internshipType) completion++;
+      if (extendedProfile.preferredLocation) completion++;
+      if (extendedProfile.readyToWorkAfterInternship !== undefined) completion++;
+    } else {
+      // Fallback to User model fields if no extended profile
+      if (this.profile.skills && this.profile.skills.length > 0) completion++;
+      if (this.profile.education && this.profile.education.length > 0) completion++;
+      if (this.profile.resume) completion++;
+      if (this.profile.workExperience && this.profile.workExperience.length > 0) completion++;
+      if (this.profile.jobTitles && this.profile.jobTitles.length > 0) completion++;
+    }
+    
   } else if (this.role === 'employer') {
     totalFields = 6;
     if (this.company.name) completion++;
