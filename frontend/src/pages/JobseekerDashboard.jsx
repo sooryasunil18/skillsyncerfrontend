@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { dashboardApi, apiRequest } from '../utils/api';
+import { dashboardApi, apiRequest, jobseekerApi } from '../utils/api';
 import JobseekerProfileManager from '../components/JobseekerProfileManager';
+import InternshipApplicationForm from '../components/InternshipApplicationForm';
 import {
   User,
   Settings,
@@ -43,7 +44,11 @@ import {
   Globe,
   Eye,
   Loader,
-  AlertTriangle
+  AlertTriangle,
+  Filter,
+  ExternalLink,
+  Heart,
+  Building
 } from 'lucide-react';
 
 const JobseekerDashboard = () => {
@@ -68,6 +73,23 @@ const JobseekerDashboard = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
   
   const [showProfileManager, setShowProfileManager] = useState(false);
+  
+  // New state for internship postings
+  const [internships, setInternships] = useState([]);
+  const [loadingInternships, setLoadingInternships] = useState(false);
+  const [internshipFilters, setInternshipFilters] = useState({
+    search: '',
+    industry: '',
+    location: '',
+    mode: '',
+    duration: ''
+  });
+  const [internshipPagination, setInternshipPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10
+  });
 
   // Minimal profile state kept for dashboard widgets and helpers
   const [profileData, setProfileData] = useState({
@@ -130,6 +152,130 @@ const JobseekerDashboard = () => {
 
     return () => clearInterval(timeInterval);
   }, []);
+
+  // Load internships when jobs section is active
+  useEffect(() => {
+    if (activeSection === 'jobs') {
+      loadInternships();
+    }
+  }, [activeSection, internshipFilters]);
+
+  const loadInternships = async () => {
+    setLoadingInternships(true);
+    try {
+      const response = await jobseekerApi.getInternships({
+        ...internshipFilters,
+        page: internshipPagination.currentPage,
+        limit: internshipPagination.itemsPerPage
+      });
+
+      if (response.success && response.data.success) {
+        console.log('✅ Loaded', response.data.data.internships?.length || 0, 'internships');
+        setInternships(response.data.data.internships || []);
+        setInternshipPagination(response.data.data.pagination || {
+          currentPage: 1,
+          totalPages: 1,
+          totalItems: 0,
+          itemsPerPage: 10
+        });
+      } else {
+        console.error('Failed to load internships:', response.data?.message || response.message);
+        setInternships([]);
+      }
+    } catch (error) {
+      console.error('Error loading internships:', error);
+      setInternships([]);
+    } finally {
+      setLoadingInternships(false);
+    }
+  };
+
+  const handleFilterChange = (field, value) => {
+    setInternshipFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setInternshipPagination(prev => ({
+      ...prev,
+      currentPage: 1 // Reset to first page when filters change
+    }));
+  };
+
+  const handlePageChange = (newPage) => {
+    setInternshipPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+  };
+
+  const handleApplyForInternship = async (internshipId) => {
+    try {
+      const response = await jobseekerApi.applyForInternship(internshipId);
+      if (response.success && response.data.success) {
+        alert('Application submitted successfully!');
+        // Reload internships to update application status
+        loadInternships();
+      } else {
+        alert(response.data?.message || response.message || 'Failed to submit application');
+      }
+    } catch (error) {
+      console.error('Error applying for internship:', error);
+      alert('Failed to submit application. Please try again.');
+    }
+  };
+
+  const handleApplyDetailed = (internship) => {
+    setSelectedInternship(internship);
+    setShowApplicationForm(true);
+  };
+
+  const handleApplicationSuccess = () => {
+    setShowApplicationForm(false);
+    setSelectedInternship(null);
+    // Reload internships and applications to update status
+    loadInternships();
+    loadApplications();
+    alert('Application submitted successfully!');
+  };
+
+  const handleApplicationCancel = () => {
+    setShowApplicationForm(false);
+    setSelectedInternship(null);
+  };
+
+  // Load internship applications
+  const [applications, setApplications] = useState([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+
+  // Application form state
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [selectedInternship, setSelectedInternship] = useState(null);
+  const [applicationFormData, setApplicationFormData] = useState(null);
+
+  const loadApplications = async () => {
+    setLoadingApplications(true);
+    try {
+      const response = await jobseekerApi.getDetailedApplications();
+      if (response.success) {
+        setApplications(response.data || []);
+      } else {
+        console.error('Failed to load applications:', response.data?.message || response.message);
+        setApplications([]);
+      }
+    } catch (error) {
+      console.error('Error loading applications:', error);
+      setApplications([]);
+    } finally {
+      setLoadingApplications(false);
+    }
+  };
+
+  // Load applications when applications section is active
+  useEffect(() => {
+    if (activeSection === 'applications') {
+      loadApplications();
+    }
+  }, [activeSection]);
 
   const fetchDashboardData = async () => {
     try {
@@ -235,7 +381,7 @@ const JobseekerDashboard = () => {
       current: activeSection === 'profile'
     },
     {
-      name: 'Find Jobs',
+      name: 'Find Internships',
       icon: Search,
       section: 'jobs',
       current: activeSection === 'jobs'
@@ -247,7 +393,7 @@ const JobseekerDashboard = () => {
       current: activeSection === 'applications'
     },
     {
-      name: 'Saved Jobs',
+      name: 'Saved Internships',
       icon: BookmarkIcon,
       section: 'saved',
       current: activeSection === 'saved'
@@ -320,7 +466,7 @@ const JobseekerDashboard = () => {
       case 'jobs':
         return (
           <div className="space-y-8">
-            {/* Job Search Filters */}
+            {/* Internship Search Filters */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -328,14 +474,16 @@ const JobseekerDashboard = () => {
             >
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                 <Search className="w-6 h-6 mr-3 text-blue-600" />
-                Find Your Perfect Job
+                Find Your Perfect Internship
               </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div>
                   <input 
                     type="text" 
-                    placeholder="Job title or keywords"
+                    placeholder="Internship title or keywords"
+                    value={internshipFilters.search}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -343,36 +491,72 @@ const JobseekerDashboard = () => {
                   <input 
                     type="text" 
                     placeholder="Location"
+                    value={internshipFilters.location}
+                    onChange={(e) => handleFilterChange('location', e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <select className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <option>All Industries</option>
-                    <option>Technology</option>
-                    <option>Healthcare</option>
-                    <option>Finance</option>
-                    <option>Education</option>
+                  <select 
+                    value={internshipFilters.industry}
+                    onChange={(e) => handleFilterChange('industry', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Industries</option>
+                    <option value="IT/Technology">IT/Technology</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Banking">Banking</option>
+                    <option value="Education">Education</option>
+                    <option value="Media">Media</option>
+                    <option value="Consulting">Consulting</option>
+                    <option value="Manufacturing">Manufacturing</option>
+                    <option value="Retail">Retail</option>
+                    <option value="Real Estate">Real Estate</option>
+                    <option value="Automotive">Automotive</option>
+                    <option value="Food & Beverage">Food & Beverage</option>
+                    <option value="Non-Profit">Non-Profit</option>
+                    <option value="Government">Government</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium shadow-lg transition-all duration-200"
+                  <select 
+                    value={internshipFilters.mode}
+                    onChange={(e) => handleFilterChange('mode', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <Search className="w-5 h-5 inline mr-2" />
-                    Search Jobs
-                  </motion.button>
+                    <option value="">All Modes</option>
+                    <option value="Remote">Remote</option>
+                    <option value="Offline">Offline</option>
+                    <option value="Online">Online</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
+                </div>
+                <div>
+                  <select 
+                    value={internshipFilters.duration}
+                    onChange={(e) => handleFilterChange('duration', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Durations</option>
+                    <option value="15 days">15 days</option>
+                    <option value="1 month">1 month</option>
+                    <option value="3 months">3 months</option>
+                    <option value="6 months">6 months</option>
+                    <option value="1 year">1 year</option>
+                    <option value="Full day">Full day</option>
+                    <option value="Half day">Half day</option>
+                  </select>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2 mb-4">
                 <span className="text-sm text-gray-600">Popular searches:</span>
-                {['Remote Developer', 'Marketing Manager', 'Data Analyst', 'UX Designer', 'Project Manager'].map((tag) => (
+                {['Software Development', 'Data Science', 'UX Design', 'Business Analysis', 'Content Writing'].map((tag) => (
                   <motion.button
                     key={tag}
                     whileHover={{ scale: 1.05 }}
+                    onClick={() => handleFilterChange('search', tag)}
                     className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200 transition-colors"
                   >
                     {tag}
@@ -381,65 +565,132 @@ const JobseekerDashboard = () => {
               </div>
             </motion.div>
 
-            {/* Job Recommendations */}
+            {/* Internship Listings */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
             >
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Target className="w-5 h-5 mr-2 text-green-600" />
-                Recommended for You
-              </h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <Target className="w-5 h-5 mr-2 text-green-600" />
+                  Available Internships
+                </h3>
+                {loadingInternships && (
+                  <div className="flex items-center text-blue-600">
+                    <Loader className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </div>
+                )}
+              </div>
               
-              <div className="space-y-4">
-                {[
-                  { title: 'Senior Software Engineer', company: 'TechCorp Inc.', location: 'San Francisco, CA', salary: '$120k - $160k', type: 'Full-time' },
-                  { title: 'Product Manager', company: 'InnovateLab', location: 'New York, NY', salary: '$100k - $140k', type: 'Full-time' },
-                  { title: 'UX Designer', company: 'DesignStudio', location: 'Remote', salary: '$80k - $110k', type: 'Contract' }
-                ].map((job, index) => (
-                  <motion.div
-                    key={index}
-                    whileHover={{ scale: 1.01, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                    className="border border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-all duration-200 cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900">{job.title}</h4>
-                        <p className="text-blue-600 font-medium">{job.company}</p>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                          <span className="flex items-center">
-                            <MapPin className="w-4 h-4 mr-1" />
-                            {job.location}
-                          </span>
-                          <span className="flex items-center">
-                            <Briefcase className="w-4 h-4 mr-1" />
-                            {job.type}
-                          </span>
-                          <span className="font-medium text-green-600">{job.salary}</span>
+              {loadingInternships ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading internships...</p>
+                </div>
+              ) : internships.length === 0 ? (
+                <div className="text-center py-12">
+                  <Search className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Internships Found</h3>
+                  <p className="text-gray-600 mb-6">Try adjusting your search criteria or check back later for new opportunities.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {internships.map((internship, index) => (
+                    <motion.div
+                      key={internship._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900 text-lg">{internship.title}</h4>
+                          <p className="text-blue-600 font-medium">{internship.companyName}</p>
+                          <p className="text-gray-600 mt-2">{internship.description}</p>
+                          <div className="flex items-center space-x-4 mt-3 text-sm text-gray-600">
+                            <span className="flex items-center">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              {internship.location}
+                            </span>
+                            <span className="flex items-center">
+                              <Briefcase className="w-4 h-4 mr-1" />
+                              {internship.mode}
+                            </span>
+                            <span className="flex items-center">
+                              <Clock className="w-4 h-4 mr-1" />
+                              {internship.duration}
+                            </span>
+                            <span className="flex items-center">
+                              <Building className="w-4 h-4 mr-1" />
+                              {internship.industry}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {internship.skillsRequired && internship.skillsRequired.map((skill, skillIndex) => (
+                              <span
+                                key={skillIndex}
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex flex-col space-y-2 ml-4">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handleApplyDetailed(internship)}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                          >
+                            Apply Now
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <BookmarkIcon className="w-5 h-5" />
+                          </motion.button>
                         </div>
                       </div>
-                      <div className="flex space-x-2">
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <BookmarkIcon className="w-5 h-5" />
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                        >
-                          Apply
-                        </motion.button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {/* Pagination */}
+              {internshipPagination.totalPages > 1 && (
+                <div className="flex items-center justify-center space-x-2 mt-8">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handlePageChange(internshipPagination.currentPage - 1)}
+                    disabled={internshipPagination.currentPage === 1}
+                    className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Previous
+                  </motion.button>
+                  
+                  <span className="px-3 py-2 text-gray-600">
+                    Page {internshipPagination.currentPage} of {internshipPagination.totalPages}
+                  </span>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handlePageChange(internshipPagination.currentPage + 1)}
+                    disabled={internshipPagination.currentPage === internshipPagination.totalPages}
+                    className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Next
+                  </motion.button>
+                </div>
+              )}
             </motion.div>
           </div>
         );
@@ -454,13 +705,108 @@ const JobseekerDashboard = () => {
             >
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                 <FileText className="w-6 h-6 mr-3 text-blue-600" />
-                My Applications
+                My Internship Applications
               </h2>
-              <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Yet</h3>
-                <p className="text-gray-600">Start applying to jobs to see your applications here.</p>
-              </div>
+              
+              {loadingApplications ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading your applications...</p>
+                </div>
+              ) : applications.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Yet</h3>
+                  <p className="text-gray-600 mb-6">Start applying to internships to see your applications here.</p>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setActiveSection('jobs')}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <Search className="w-5 h-5 inline mr-2" />
+                    Browse Internships
+                  </motion.button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {applications.map((application, index) => (
+                    <motion.div
+                      key={application._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {application.internshipDetails?.title || application.internship?.title || 'Internship'}
+                          </h3>
+                          <p className="text-blue-600 font-medium mb-2">
+                            {application.internshipDetails?.companyName || application.internship?.companyName || 'Company'}
+                          </p>
+                          <div className="flex items-center space-x-6 text-sm text-gray-600">
+                            <span className="flex items-center">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              {application.internshipDetails?.location || application.internship?.location || 'Location not specified'}
+                            </span>
+                            <span className="flex items-center">
+                              <Clock className="w-4 h-4 mr-1" />
+                              {application.internshipDetails?.duration || application.internship?.duration || 'Duration not specified'}
+                            </span>
+                            <span className="flex items-center">
+                              <Globe className="w-4 h-4 mr-1" />
+                              {application.internshipDetails?.workMode || application.internship?.mode || 'Mode not specified'}
+                            </span>
+                            <span className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-1" />
+                              Applied {new Date(application.appliedAt || application.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {/* Show personal details for detailed applications */}
+                          {application.personalDetails && (
+                            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                              <p className="text-sm text-gray-700">
+                                <strong>Applied as:</strong> {application.personalDetails.fullName} ({application.personalDetails.emailAddress})
+                              </p>
+                              {application.personalDetails.phoneNumber && (
+                                <p className="text-sm text-gray-700">
+                                  <strong>Phone:</strong> {application.personalDetails.phoneNumber}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {/* Show cover letter for simple applications */}
+                          {application.coverLetter && (
+                            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                              <p className="text-sm text-gray-700">
+                                <strong>Cover Letter:</strong> {application.coverLetter}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            application.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                            application.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {application.status ? application.status.charAt(0).toUpperCase() + application.status.slice(1) : 'Applied'}
+                          </span>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                          >
+                            View Details
+                          </motion.button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </div>
         );
@@ -475,12 +821,12 @@ const JobseekerDashboard = () => {
             >
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                 <BookmarkIcon className="w-6 h-6 mr-3 text-blue-600" />
-                Saved Jobs
+                Saved Internships
               </h2>
               <div className="text-center py-12">
                 <BookmarkIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Saved Jobs</h3>
-                <p className="text-gray-600">Save interesting jobs to view them later.</p>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Saved Internships</h3>
+                <p className="text-gray-600">Save interesting internships to view them later.</p>
               </div>
             </motion.div>
           </div>
@@ -921,9 +1267,9 @@ const JobseekerDashboard = () => {
               <span className="text-gray-400">/</span>
               <span className="text-gray-900 font-medium">
                 {activeSection === 'profile' ? 'Profile' :
-                 activeSection === 'jobs' ? 'Find Jobs' :
+                 activeSection === 'jobs' ? 'Find Internships' :
                  activeSection === 'applications' ? 'Applications' :
-                 activeSection === 'saved' ? 'Saved Jobs' :
+                                   activeSection === 'saved' ? 'Saved Internships' :
                  activeSection === 'settings' ? 'Settings' : 'Current Section'}
               </span>
             </nav>
@@ -1439,6 +1785,22 @@ const JobseekerDashboard = () => {
         <JobseekerProfileManager
           onClose={() => setShowProfileManager(false)}
           initialData={dashboardData?.profile || {}}
+        />
+      )}
+
+      {/* Internship Application Form Modal */}
+      {showApplicationForm && selectedInternship && (
+        <InternshipApplicationForm
+          internship={selectedInternship}
+          isOpen={showApplicationForm}
+          onClose={handleApplicationCancel}
+          onSuccess={() => {
+            alert('Application submitted successfully!');
+            setShowApplicationForm(false);
+            setSelectedInternship(null);
+            loadInternships();
+            loadApplications();
+          }}
         />
       )}
     </div>

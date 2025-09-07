@@ -30,6 +30,18 @@ const cosineSimilarity = (a, b) => {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 };
 
+const DOMAIN_KEYWORDS = {
+  ml: ['machine learning', 'supervised', 'unsupervised', 'regression', 'classification', 'xgboost', 'random forest', 'svm', 'feature engineering', 'model evaluation'],
+  ai: ['artificial intelligence', 'reasoning', 'knowledge graphs'],
+  nlp: ['nlp', 'tokenization', 'ner', 'pos', 'transformer', 'bert', 'gpt', 'spacy', 'huggingface'],
+  cv: ['computer vision', 'opencv', 'cnn', 'resnet', 'yolo', 'segmentation', 'detection'],
+  ocr: ['ocr', 'tesseract', 'paddleocr', 'docai', 'text extraction'],
+  mlops: ['mlops', 'mlflow', 'kubeflow', 'dagster', 'airflow', 'dvc', 'feature store', 'monitoring'],
+  cloud: ['aws', 'gcp', 'azure', 's3', 'ec2', 'lambda', 'gke', 'eks', 'aks', 'cloud run']
+};
+
+const ACTION_VERBS = ['built', 'designed', 'implemented', 'developed', 'optimized', 'deployed', 'automated', 'improved', 'reduced', 'increased', 'led', 'created'];
+
 /**
  * Compute NLP-based ATS score given a profile and optional job description.
  */
@@ -57,13 +69,38 @@ const computeNLPScore = async (profile, jobDescriptionText = '') => {
   // Experience summary presence
   const experiencePresent = profile?.nlp?.extracted?.experienceSummary?.length > 40 ? 1 : 0;
 
+  // Keyword coverage across target domains
+  const lowerText = (resumeText || '').toLowerCase();
+  const allDomainKeywords = Object.values(DOMAIN_KEYWORDS).flat();
+  const covered = allDomainKeywords.filter((k) => lowerText.includes(k)).length;
+  const keywordCoverage = Math.min(1, covered / Math.max(10, allDomainKeywords.length / 4));
+
+  // Formatting compliance: penalize tables/graphics indicators; reward ATS-friendly sections
+  const hasTablesOrGraphics = /<table|{\\tbl|\\includegraphics|\bgraphic\b|\bimage\b/i.test(resumeText);
+  const hasSections = /(education|experience|projects|skills|certifications)/i.test(resumeText);
+  const formattingCompliance = Math.max(0, (hasSections ? 1 : 0.6) - (hasTablesOrGraphics ? 0.5 : 0));
+
+  // Action verbs and quantifiable results
+  const verbHits = ACTION_VERBS.filter((v) => new RegExp(`\\b${v}\\b`, 'i').test(resumeText)).length;
+  const actionVerbScore = Math.min(1, verbHits / 6);
+  const quantifiableHits = ((resumeText.match(/\b(\d+%|\d+\s*(?:k|m|million|billion)?|\$\d+)/gi)) || []).length;
+  const quantifiableScore = Math.min(1, quantifiableHits / 5);
+
+  // Structure compliance: typical US resume sections
+  const structureHits = ['summary', 'experience', 'education', 'skills'].filter((s) => new RegExp(`\b${s}\b`, 'i').test(resumeText)).length;
+  const structureCompliance = Math.min(1, structureHits / 4);
+
   // Weighted score
   const score = Math.round(
     (
-      0.45 * (jobSimilarity || 0) +
-      0.30 * skillMatch +
-      0.15 * educationMatch +
-      0.10 * experiencePresent
+      0.30 * (jobSimilarity || 0) +
+      0.20 * skillMatch +
+      0.10 * educationMatch +
+      0.10 * experiencePresent +
+      0.15 * keywordCoverage +
+      0.10 * formattingCompliance +
+      0.03 * actionVerbScore +
+      0.02 * quantifiableScore
     ) * 100
   );
 
@@ -71,7 +108,12 @@ const computeNLPScore = async (profile, jobDescriptionText = '') => {
     skillMatch: Math.round(skillMatch * 100),
     educationMatch: Math.round(educationMatch * 100),
     experienceMatch: Math.round(experiencePresent * 100),
-    jobSimilarity: Math.round((jobSimilarity || 0) * 100)
+    jobSimilarity: Math.round((jobSimilarity || 0) * 100),
+    keywordCoverage: Math.round(keywordCoverage * 100),
+    formattingCompliance: Math.round(formattingCompliance * 100),
+    actionVerbs: Math.round(actionVerbScore * 100),
+    quantifiableResults: Math.round(quantifiableScore * 100),
+    structureCompliance: Math.round(structureCompliance * 100)
   };
 
   const suggestions = [];
@@ -83,6 +125,18 @@ const computeNLPScore = async (profile, jobDescriptionText = '') => {
   }
   if (!profile?.nlp?.extracted?.experienceSummary) {
     suggestions.push({ field: 'experience', message: 'Include a short experience summary.', priority: 'medium' });
+  }
+  if (details.keywordCoverage < 60) {
+    suggestions.push({ field: 'keywords', message: 'Increase domain keywords for ML/AI/NLP/CV/OCR/MLOps/Cloud.', priority: 'high' });
+  }
+  if (details.actionVerbs < 60) {
+    suggestions.push({ field: 'language', message: 'Use more impact action verbs (built, optimized, deployed, etc.).', priority: 'medium' });
+  }
+  if (details.quantifiableResults < 60) {
+    suggestions.push({ field: 'impact', message: 'Add quantifiable metrics (% improvements, cost/time savings).', priority: 'medium' });
+  }
+  if (details.formattingCompliance < 60) {
+    suggestions.push({ field: 'formatting', message: 'Avoid tables/graphics; use clear ATS-friendly sections.', priority: 'high' });
   }
 
   return { score, details, suggestions, resumeVector };

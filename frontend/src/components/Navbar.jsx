@@ -21,6 +21,7 @@ const Navbar = () => {
     { name: 'About', path: '/about' },
     { name: 'Features', path: '/features' },
     { name: 'How It Works', path: '/how-it-works' },
+    { name: 'Recruit with Us', path: '/employer-info' },
     { name: 'Contact', path: '/contact' },
   ];
 
@@ -68,6 +69,8 @@ const Navbar = () => {
                 )}
               </Link>
             ))}
+            
+            {/* Login Button */}
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -123,6 +126,8 @@ const Navbar = () => {
                   </Link>
                 </motion.div>
               ))}
+              
+              {/* Mobile Login Button */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}

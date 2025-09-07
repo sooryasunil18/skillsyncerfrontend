@@ -30,14 +30,25 @@ const uploadToCloudinary = async (fileBuffer, folder = 'resumes', publicId = nul
   try {
     const uploadOptions = {
       folder,
-      resource_type: 'auto',
-      allowed_formats: ['pdf', 'doc', 'docx'],
-      // Transformations are optional for documents but safe to include
-      transformation: [
+      resource_type: 'auto'
+    };
+
+    // Set allowed formats based on folder type
+    if (folder === 'employee-id-cards') {
+      uploadOptions.allowed_formats = ['jpg', 'jpeg'];
+      uploadOptions.transformation = [
+        { width: 800, height: 600, crop: 'limit' },
         { quality: 'auto' },
         { fetch_format: 'auto' }
-      ]
-    };
+      ];
+    } else {
+      // For resumes and other documents
+      uploadOptions.allowed_formats = ['pdf', 'doc', 'docx'];
+      uploadOptions.transformation = [
+        { quality: 'auto' },
+        { fetch_format: 'auto' }
+      ];
+    }
 
     if (publicId) uploadOptions.public_id = publicId;
 

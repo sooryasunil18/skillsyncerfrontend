@@ -358,7 +358,7 @@ const createSampleData = async () => {
     const sampleEmployer = new User({
       name: 'TechCorp HR',
       email: 'hr@techcorp.com',
-      role: 'employer',
+              role: 'company',
       password: 'password123',
       isEmailVerified: true,
       profile: {

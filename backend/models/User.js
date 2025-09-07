@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['jobseeker', 'employer', 'mentor', 'admin'],
+    enum: ['jobseeker', 'employer', 'company', 'mentor', 'admin', 'employee'],
     default: 'jobseeker',
     required: true
   },
@@ -215,6 +215,29 @@ const userSchema = new mongoose.Schema({
       trim: true
     }
   },
+  // Employee specific fields
+  employeeProfile: {
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    joinDate: {
+      type: Date,
+      default: Date.now
+    },
+    department: {
+      type: String,
+      trim: true
+    },
+    position: {
+      type: String,
+      trim: true
+    },
+    employeeId: {
+      type: String,
+      trim: true
+    }
+  },
   isEmailVerified: {
     type: Boolean,
     default: false
@@ -294,7 +317,7 @@ userSchema.methods.calculateProfileCompletion = async function() {
       if (this.profile.jobTitles && this.profile.jobTitles.length > 0) completion++;
     }
     
-  } else if (this.role === 'employer') {
+  } else if (this.role === 'employer' || this.role === 'company') {
     totalFields = 6;
     if (this.company.name) completion++;
     if (this.company.description) completion++;

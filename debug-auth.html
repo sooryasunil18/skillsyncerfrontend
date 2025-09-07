@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Authentication Debug</h1>
+    
+    <div class="debug-section">
+        <h2>Step 1: Check Current Auth State</h2>
+        <button onclick="checkAuthState()">Check Auth State</button>
+        <div id="auth-state"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Step 2: Login Test</h2>
+        <button onclick="loginTest()">Login as Test Employer</button>
+        <div id="login-result"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Step 3: Test API Calls</h2>
+        <button onclick="testApiCalls()">Test API Calls</button>
+        <div id="api-result"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Step 4: Clear Auth Data</h2>
+        <button onclick="clearAuth()">Clear All Auth Data</button>
+        <div id="clear-result"></div>
+    </div>
+
+    <script>
+        function checkAuthState() {
+            const token = localStorage.getItem('token');
+            const userRole = localStorage.getItem('userRole');
+            const userName = localStorage.getItem('userName');
+            const userEmail = localStorage.getItem('userEmail');
+            
+            const stateDiv = document.getElementById('auth-state');
+            stateDiv.innerHTML = `
+                <h3>Current Authentication State:</h3>
+                <pre>
+Token: ${token ? '✅ Present' : '❌ Missing'}
+User Role: ${userRole || '❌ Missing'}
+User Name: ${userName || '❌ Missing'}
+User Email: ${userEmail || '❌ Missing'}
+                </pre>
+            `;
+        }
+
+        async function loginTest() {
+            const resultDiv = document.getElementById('login-result');
+            resultDiv.innerHTML = '<span class="info">Logging in...</span>';
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'test@employer.com',
+                        password: 'Password123'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store the token and user data
+                    localStorage.setItem('token', data.data.token);
+                    localStorage.setItem('userRole', data.data.user.role);
+                    localStorage.setItem('userName', data.data.user.name);
+                    localStorage.setItem('userEmail', data.data.user.email);
+                    
+                    resultDiv.innerHTML = `
+                        <span class="success">✅ Login successful!</span>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Login failed: ${data.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Network error: ${error.message}</span>`;
+            }
+        }
+
+        async function testApiCalls() {
+            const resultDiv = document.getElementById('api-result');
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                resultDiv.innerHTML = '<span class="error">❌ No token found. Please login first.</span>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<span class="info">Testing API calls...</span>';
+            
+            try {
+                // Test internship titles
+                const titlesResponse = await fetch('http://localhost:5001/api/employer/internship-titles?industry=IT/Technology', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const titlesData = await titlesResponse.json();
+                
+                // Test locations
+                const locationsResponse = await fetch('http://localhost:5001/api/employer/india-locations', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const locationsData = await locationsResponse.json();
+                
+                resultDiv.innerHTML = `
+                    <span class="success">✅ API calls successful!</span>
+                    <h3>Titles Response:</h3>
+                    <pre>${JSON.stringify(titlesData, null, 2)}</pre>
+                    <h3>Locations Response:</h3>
+                    <pre>${JSON.stringify(locationsData, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ API call failed: ${error.message}</span>`;
+            }
+        }
+
+        function clearAuth() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userEmail');
+            
+            const resultDiv = document.getElementById('clear-result');
+            resultDiv.innerHTML = '<span class="success">✅ All auth data cleared!</span>';
+        }
+
+        // Check auth state on page load
+        checkAuthState();
+    </script>
+</body>
+</html>

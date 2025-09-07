@@ -2,6 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const User = require('../models/User');
 const JobseekerProfile = require('../models/JobseekerProfile');
+const InternshipPosting = require('../models/InternshipPosting');
+const InternshipApplication = require('../models/InternshipApplication');
 const { protect, authorize } = require('../middleware/auth');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
 const { updateProfileATSScore, generateATSSuggestions } = require('../utils/atsScoring');
@@ -9,6 +11,8 @@ const { extractText, extractEntities } = require('../utils/resumeParser');
 const { analyzeAndSaveNLP, computeNLPScore } = require('../utils/atsScoringNLP');
 
 const router = express.Router();
+
+
 
 // Apply protection and role authorization to all routes
 router.use(protect);
@@ -877,8 +881,15 @@ router.post('/upload-resume', upload.single('resume'), async (req, res) => {
     }
     const extracted = extractEntities(parsedText);
 
-    // Save NLP analysis and compute NLP ATS
+    // Save NLP analysis and compute NLP ATS, keep previous snapshot for comparison
+    const prevNlp = (await JobseekerProfile.findOne({ userId: req.user._id }))?.nlp || null;
     const nlpResult = await analyzeAndSaveNLP(req.user._id, parsedText, extracted);
+    const profileAfter = await JobseekerProfile.findOne({ userId: req.user._id });
+    if (profileAfter?.nlp) {
+      profileAfter.nlp.history = profileAfter.nlp.history || [];
+      profileAfter.nlp.history.push({ analyzedAt: new Date(), score: profileAfter.nlp.atsNLP?.score || 0, details: profileAfter.nlp.atsNLP?.details || {} });
+      await profileAfter.save();
+    }
 
     // Update rule-based ATS score for backward compatibility
     const atsResult = await updateProfileATSScore(req.user._id);
@@ -897,6 +908,11 @@ router.post('/upload-resume', upload.single('resume'), async (req, res) => {
         resumeUrl: uploadResult.url,
         atsScore: atsResult.atsScore,
         atsNLP: nlpResult.success ? nlpResult.atsNLP : undefined,
+        comparison: prevNlp && nlpResult.success && nlpResult.atsNLP ? {
+          previousScore: prevNlp.atsNLP?.score || 0,
+          currentScore: nlpResult.atsNLP.score,
+          delta: (nlpResult.atsNLP.score - (prevNlp.atsNLP?.score || 0))
+        } : undefined,
         suggestions: atsResult.suggestions,
         profileCompletion: user ? user.profileCompletion : 0
       }
@@ -988,6 +1004,428 @@ router.get('/ats-score', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching ATS score'
+    });
+  }
+});
+
+// @desc    Get all available internship postings with search and filters
+// @route   GET /api/jobseeker/internships
+// @access  Private (Jobseeker only)
+router.get('/internships', async (req, res) => {
+  try {
+    const {
+      search,
+      industry,
+      location,
+      mode,
+      duration,
+      page = 1,
+      limit = 10,
+      sortBy = 'postedAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build filter object
+    const filters = { status: 'active' };
+    
+    if (search) {
+      filters.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { companyName: { $regex: search, $options: 'i' } },
+        { skillsRequired: { $in: [new RegExp(search, 'i')] } }
+      ];
+    }
+    
+    if (industry) {
+      filters.industry = industry;
+    }
+    
+    if (location) {
+      filters.location = { $regex: location, $options: 'i' };
+    }
+    
+    if (mode) {
+      filters.mode = mode;
+    }
+    
+    if (duration) {
+      filters.duration = duration;
+    }
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Get total count for pagination
+    const total = await InternshipPosting.countDocuments(filters);
+    
+    // Get internships with pagination
+    const internships = await InternshipPosting.find(filters)
+      .populate('employerId', 'name company.name')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select('-applications'); // Don't include applications for jobseekers
+
+    // Format response
+    const formattedInternships = internships.map(internship => ({
+      _id: internship._id,
+      title: internship.title,
+      companyName: internship.companyName || (internship.employerId?.company?.name || internship.employerId?.name || 'Company'),
+      industry: internship.industry,
+      location: internship.location,
+      mode: internship.mode,
+      startDate: internship.startDate,
+      lastDateToApply: internship.lastDateToApply,
+      duration: internship.duration,
+      totalSeats: internship.totalSeats,
+      availableSeats: internship.availableSeats,
+      description: internship.description,
+      skillsRequired: internship.skillsRequired,
+      certifications: internship.certifications,
+      eligibility: internship.eligibility,
+      stipend: internship.stipend,
+      benefits: internship.benefits,
+      postedAt: internship.postedAt,
+      isAcceptingApplications: internship.isAcceptingApplications(),
+      daysLeftToApply: Math.ceil((new Date(internship.lastDateToApply) - new Date()) / (1000 * 60 * 60 * 24))
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        internships: formattedInternships,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalItems: total,
+          itemsPerPage: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching internships:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching internships'
+    });
+  }
+});
+
+// @desc    Get internship posting details by ID
+// @route   GET /api/jobseeker/internships/:id
+// @access  Private (Jobseeker only)
+router.get('/internships/:id', async (req, res) => {
+  try {
+    const internship = await InternshipPosting.findById(req.params.id)
+      .populate('employerId', 'name company.name company.description company.website')
+      .select('-applications');
+
+    if (!internship) {
+      return res.status(404).json({
+        success: false,
+        message: 'Internship posting not found'
+      });
+    }
+
+    if (internship.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'This internship posting is not currently active'
+      });
+    }
+
+    const formattedInternship = {
+      _id: internship._id,
+      title: internship.title,
+      companyName: internship.companyName || (internship.employerId?.company?.name || internship.employerId?.name || 'Company'),
+      companyDescription: internship.employerId?.company?.description,
+      companyWebsite: internship.employerId?.company?.website,
+      industry: internship.industry,
+      location: internship.location,
+      mode: internship.mode,
+      startDate: internship.startDate,
+      lastDateToApply: internship.lastDateToApply,
+      duration: internship.duration,
+      totalSeats: internship.totalSeats,
+      availableSeats: internship.availableSeats,
+      description: internship.description,
+      skillsRequired: internship.skillsRequired,
+      certifications: internship.certifications,
+      eligibility: internship.eligibility,
+      stipend: internship.stipend,
+      benefits: internship.benefits,
+      postedAt: internship.postedAt,
+      isAcceptingApplications: internship.isAcceptingApplications(),
+      daysLeftToApply: Math.ceil((new Date(internship.lastDateToApply) - new Date()) / (1000 * 60 * 60 * 24))
+    };
+
+    res.json({
+      success: true,
+      data: formattedInternship
+    });
+
+  } catch (error) {
+    console.error('Error fetching internship details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching internship details'
+    });
+  }
+});
+
+// @desc    Apply for an internship
+// @route   POST /api/jobseeker/internships/:id/apply
+// @access  Private (Jobseeker only)
+router.post('/internships/:id/apply', async (req, res) => {
+  try {
+    const { coverLetter } = req.body;
+    
+    const internship = await InternshipPosting.findById(req.params.id);
+    
+    if (!internship) {
+      return res.status(404).json({
+        success: false,
+        message: 'Internship posting not found'
+      });
+    }
+
+    if (internship.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'This internship posting is not currently active'
+      });
+    }
+
+    if (!internship.isAcceptingApplications()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Applications are no longer being accepted for this internship'
+      });
+    }
+
+    // Check if already applied
+    const alreadyApplied = internship.applications.some(
+      app => app.jobseekerId.toString() === req.user._id.toString()
+    );
+
+    if (alreadyApplied) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already applied for this internship'
+      });
+    }
+
+    // Get user's resume URL
+    const userProfile = await JobseekerProfile.findOne({ userId: req.user._id });
+    const resumeUrl = userProfile?.resumeUrl;
+
+    if (!resumeUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload your resume before applying for internships'
+      });
+    }
+
+    // Apply for the internship
+    const applicationResult = internship.applyForInternship(
+      req.user._id,
+      resumeUrl,
+      coverLetter || ''
+    );
+
+    if (!applicationResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: applicationResult.message
+      });
+    }
+
+    await internship.save();
+
+    res.json({
+      success: true,
+      message: 'Application submitted successfully',
+      data: {
+        applicationId: applicationResult.applicationId,
+        appliedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error applying for internship:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while submitting application'
+    });
+  }
+});
+
+// @desc    Get user's internship applications
+// @route   GET /api/jobseeker/applications
+// @access  Private (Jobseeker only)
+router.get('/applications', async (req, res) => {
+  try {
+    const applications = await InternshipPosting.find({
+      'applications.jobseekerId': req.user._id
+    })
+    .populate('employerId', 'name company.name')
+    .select('title companyName applications.$');
+
+    const formattedApplications = applications.map(internship => {
+      const application = internship.applications.find(
+        app => app.jobseekerId.toString() === req.user._id.toString()
+      );
+      
+      return {
+        _id: application._id,
+        internshipId: internship._id,
+        title: internship.title,
+        companyName: internship.companyName || (internship.employerId?.company?.name || internship.employerId?.name || 'Company'),
+        appliedAt: application.appliedAt,
+        status: application.status,
+        coverLetter: application.coverLetter,
+        resumeUrl: application.resumeUrl,
+        internship: {
+          location: internship.location,
+          mode: internship.mode,
+          duration: internship.duration,
+          startDate: internship.startDate
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data: formattedApplications
+    });
+
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching applications'
+    });
+  }
+});
+
+// @desc    Apply for an internship with detailed form
+// @route   POST /api/jobseeker/internships/:id/apply-detailed
+// @access  Private (Jobseeker only)
+router.post('/internships/:id/apply-detailed', async (req, res) => {
+  try {
+    const InternshipApplication = require('../models/InternshipApplication');
+    const applicationData = req.body;
+    
+    const internship = await InternshipPosting.findById(req.params.id);
+    
+    if (!internship) {
+      return res.status(404).json({
+        success: false,
+        message: 'Internship posting not found'
+      });
+    }
+
+    if (internship.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'This internship posting is not currently active'
+      });
+    }
+
+    if (!internship.isAcceptingApplications()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Applications are no longer being accepted for this internship'
+      });
+    }
+
+    // Check if already applied
+    const existingApplication = await InternshipApplication.findOne({
+      internshipId: req.params.id,
+      jobseekerId: req.user._id
+    });
+
+    if (existingApplication) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already applied for this internship'
+      });
+    }
+
+    // Create detailed application
+    const application = new InternshipApplication({
+      internshipId: req.params.id,
+      jobseekerId: req.user._id,
+      employerId: internship.employerId,
+      internshipDetails: applicationData.internshipDetails,
+      personalDetails: applicationData.personalDetails,
+      educationDetails: applicationData.educationDetails,
+      workExperience: applicationData.workExperience,
+      skills: applicationData.skills,
+      projects: applicationData.projects,
+      additionalInfo: applicationData.additionalInfo,
+      declarations: applicationData.declarations
+    });
+
+    await application.save();
+
+    // Also add to the internship's applications array for backward compatibility
+    internship.applications.push({
+      jobseekerId: req.user._id,
+      appliedAt: new Date(),
+      status: 'pending',
+      resumeUrl: applicationData.additionalInfo.resumeUrl,
+      coverLetter: applicationData.additionalInfo.whyJoinInternship
+    });
+
+    internship.applicationsCount = internship.applications.length;
+    internship.availableSeats = Math.max(0, internship.availableSeats - 1);
+    
+    await internship.save();
+
+    res.json({
+      success: true,
+      message: 'Application submitted successfully',
+      data: {
+        applicationId: application._id,
+        appliedAt: application.appliedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error submitting detailed application:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while submitting application'
+    });
+  }
+});
+
+// @desc    Get detailed applications for jobseeker
+// @route   GET /api/jobseeker/applications-detailed
+// @access  Private (Jobseeker only)
+router.get('/applications-detailed', async (req, res) => {
+  try {
+    const InternshipApplication = require('../models/InternshipApplication');
+    
+    const applications = await InternshipApplication.getApplicationsForJobseeker(req.user._id);
+
+    res.json({
+      success: true,
+      data: applications
+    });
+
+  } catch (error) {
+    console.error('Error fetching detailed applications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching applications'
     });
   }
 });

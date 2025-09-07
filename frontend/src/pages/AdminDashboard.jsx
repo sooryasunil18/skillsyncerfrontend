@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { API_BASE_URL } from '../config/api';
 import {
   Users,
   User,
@@ -55,6 +56,7 @@ const AdminDashboard = () => {
   const [recentUsersLoading, setRecentUsersLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [mentors, setMentors] = useState([]);
+  const [employeeRequests, setEmployeeRequests] = useState([]);
   const [stats, setStats] = useState({});
   const [pagination, setPagination] = useState({});
   const [filters, setFilters] = useState({
@@ -62,6 +64,7 @@ const AdminDashboard = () => {
     status: '',
     search: ''
   });
+  const [globalSearch, setGlobalSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifications, setNotifications] = useState(3);
@@ -82,7 +85,7 @@ const AdminDashboard = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/admin/stats', {
+      const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -108,7 +111,7 @@ const AdminDashboard = () => {
         ...(filters.status && { status: filters.status })
       });
 
-      const response = await fetch(`http://localhost:5001/api/admin/users?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -130,7 +133,7 @@ const AdminDashboard = () => {
     try {
       setRecentUsersLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/admin/users?page=1&limit=5&sortBy=createdAt&sortOrder=desc', {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users?page=1&limit=5&sortBy=createdAt&sortOrder=desc`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -156,7 +159,7 @@ const AdminDashboard = () => {
         limit: '10'
       });
 
-      const response = await fetch(`http://localhost:5001/api/admin/companies?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/companies?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -184,7 +187,7 @@ const AdminDashboard = () => {
         role: 'mentor'
       });
 
-      const response = await fetch(`http://localhost:5001/api/admin/users?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -202,11 +205,39 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchEmployeeRequests = async (page = 1) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        ...(filters.status && { status: filters.status })
+      });
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/employee-requests?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setEmployeeRequests(data.data.requests);
+        setPagination(data.data.pagination);
+      }
+    } catch (error) {
+      console.error('Error fetching employee requests:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addMentor = async (mentorData) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5001/api/admin/mentors', {
+      const response = await fetch(`${API_BASE_URL}/api/admin/mentors`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -253,7 +284,7 @@ const AdminDashboard = () => {
   const updateUserStatus = async (userId, isActive) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5001/api/admin/users/${userId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -270,6 +301,31 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error updating user status:', error);
+    }
+  };
+
+  const updateEmployeeRequestStatus = async (requestId, status, adminNotes = '') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/admin/employee-requests/${requestId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status, adminNotes })
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchEmployeeRequests(currentPage);
+        setSuccessMessage(`Employee request ${status} successfully!`);
+        setShowSuccessPopup(true);
+      } else {
+        alert(data.message || `Error ${status === 'approved' ? 'approving' : 'rejecting'} request`);
+      }
+    } catch (error) {
+      console.error('Error updating employee request status:', error);
+      alert(`Error ${status === 'approved' ? 'approving' : 'rejecting'} request`);
     }
   };
 
@@ -291,6 +347,8 @@ const AdminDashboard = () => {
       fetchCompanies(currentPage);
     } else if (activeSection === 'mentors') {
       fetchMentors(currentPage);
+    } else if (activeSection === 'employee-requests') {
+      fetchEmployeeRequests(currentPage);
     }
   }, [activeSection, currentPage, filters]);
 
@@ -305,6 +363,21 @@ const AdminDashboard = () => {
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1);
+  };
+
+  const handleGlobalSearch = (searchTerm) => {
+    setGlobalSearch(searchTerm);
+    // Filter recent users based on search term
+    if (searchTerm.trim() === '') {
+      fetchRecentUsers();
+    } else {
+      const filtered = recentUsers.filter(user => 
+        user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.role?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setRecentUsers(filtered);
+    }
   };
 
   const handleMentorFormChange = (key, value) => {
@@ -333,6 +406,7 @@ const AdminDashboard = () => {
     { id: 'users', name: 'Users', icon: Users, color: 'from-green-500 to-green-600' },
     { id: 'companies', name: 'Companies', icon: Building, color: 'from-purple-500 to-purple-600' },
     { id: 'mentors', name: 'Mentors', icon: GraduationCap, color: 'from-indigo-500 to-indigo-600' },
+    { id: 'employee-requests', name: 'Employee Requests', icon: UserCheck, color: 'from-teal-500 to-teal-600' },
     { id: 'jobs', name: 'Jobs', icon: Briefcase, color: 'from-orange-500 to-orange-600' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, color: 'from-pink-500 to-pink-600' },
     { id: 'settings', name: 'Settings', icon: Settings, color: 'from-gray-500 to-gray-600' }
@@ -344,23 +418,111 @@ const AdminDashboard = () => {
       <motion.div 
         initial={{ x: -300 }}
         animate={{ x: 0 }}
-        className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white shadow-lg relative transition-all duration-300 border-r border-gray-200`}
+        className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white shadow-xl relative transition-all duration-300 border-r border-gray-200/50`}
       >
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-200/50">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Zap className="w-6 h-6 text-white" />
-            </div>
+        {/* Logo & Admin Profile Combined Section */}
+        <div className="p-4 border-b border-gray-200/50 bg-gradient-to-br from-blue-50/30 via-purple-50/20 to-indigo-50/30 hover:from-blue-50/50 hover:via-purple-50/40 hover:to-indigo-50/50 transition-all duration-300 group cursor-pointer">
+          <div className={`${sidebarCollapsed ? 'flex flex-col items-center space-y-2' : 'flex flex-col items-center text-center space-y-3'}`}>
+            
+            {/* Logo Icon - Smaller and positioned at top */}
             {!sidebarCollapsed && (
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <div className="relative">
+                <div className="w-7 h-7 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+                  <Zap className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div className="absolute inset-0 rounded-lg ring-1 ring-blue-200/40 ring-offset-1 ring-offset-transparent"></div>
+              </div>
+            )}
+            
+            {/* Brand Name - Compact */}
+            {!sidebarCollapsed && (
+              <div className="mb-1">
+                <h1 className="text-base font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
                   SkillSyncer
                 </h1>
-                <p className="text-xs text-gray-500 font-medium">Admin Portal</p>
+                <div className="h-0.5 w-10 bg-gradient-to-r from-blue-400 to-purple-500 mx-auto mt-0.5 rounded-full"></div>
+              </div>
+            )}
+            
+            {/* Admin Profile Picture */}
+            <div className="relative">
+              <div className="relative">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 p-1 shadow-lg ring-3 ring-white/50 ring-offset-1 ring-offset-transparent group-hover:ring-blue-200/60 group-hover:shadow-xl transition-all duration-300">
+                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center shadow-inner">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Online Status Indicator */}
+                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                </div>
+                
+                {/* Edit Icon on Hover */}
+                <div className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-gray-700 hover:bg-gray-800 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100">
+                  <Edit className="w-2.5 h-2.5 text-white" />
+                </div>
+              </div>
+            </div>
+            
+            {!sidebarCollapsed && (
+              <div className="text-center space-y-1.5">
+                {/* Admin Name & Role */}
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm group-hover:text-blue-700 transition-colors duration-200">
+                    {localStorage.getItem('userName') || 'Admin User'}
+                  </h3>
+                  <p className="text-xs text-blue-600 font-medium">Administrator</p>
+                </div>
+                
+                {/* Admin Email */}
+                <p className="text-xs text-gray-500 group-hover:text-gray-600 transition-colors duration-200 truncate px-2">
+                  {localStorage.getItem('userEmail') || 'admin@skillsyncer.com'}
+                </p>
+                
+                {/* Online Status Badge with Time */}
+                <div className="inline-flex items-center space-x-1.5 bg-green-100 group-hover:bg-green-200 px-2.5 py-0.5 rounded-full transition-all duration-200">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-green-700 font-medium">Online</span>
+                  <Clock className="w-2.5 h-2.5 text-green-600" />
+                  <span className="text-xs text-green-600 font-mono">
+                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {sidebarCollapsed && (
+              <div className="text-center space-y-1.5">
+                {/* Logo for collapsed state */}
+                <div className="w-7 h-7 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                  <Zap className="w-3.5 h-3.5 text-white" />
+                </div>
+                {/* Admin initials below logo */}
+                <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors duration-200">
+                  <span className="text-xs font-bold text-blue-700">
+                    {(localStorage.getItem('userName') || 'Admin User').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  </span>
+                </div>
               </div>
             )}
           </div>
+          
+          {/* Quick Actions - Only show when sidebar is expanded */}
+          {!sidebarCollapsed && (
+            <div className="mt-3 flex items-center space-x-1.5">
+              <button className="flex-1 bg-white/80 hover:bg-white border border-gray-200/60 hover:border-blue-200 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-700 hover:text-blue-700 transition-all duration-200 hover:shadow-md group/btn">
+                <Settings className="w-3 h-3 inline mr-1.5 group-hover/btn:rotate-90 transition-transform duration-300" />
+                Edit Profile
+              </button>
+              <button className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200 hover:shadow-md transform hover:scale-105">
+                <Bell className="w-3 h-3 inline mr-1.5" />
+                Notifications
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Toggle Button */}
@@ -370,28 +532,6 @@ const AdminDashboard = () => {
         >
           {sidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
         </button>
-
-        {/* Admin Profile */}
-        <div className="p-4 border-b border-gray-200/50">
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
-                <User className="w-6 h-6 text-white" />
-              </div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1">
-                <p className="font-semibold text-gray-800">{localStorage.getItem('userName') || 'Admin User'}</p>
-                <p className="text-xs text-gray-500">{currentTime.toLocaleTimeString()}</p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs text-green-600 font-medium">Online</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Navigation */}
         <nav className="p-4 flex-1 space-y-2">
@@ -449,100 +589,185 @@ const AdminDashboard = () => {
       </motion.div>
 
       {/* Main Content */}
-      <div className="flex-1 p-8 overflow-auto">
-        {/* Header */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          {/* Welcome Header */}
+      <div className="flex-1 overflow-auto bg-gray-50">
+        {/* Top Header Bar */}
+        <div className="bg-white border-b border-gray-200 px-8 py-4 sticky top-0 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-gray-900">
+                {activeSection === 'overview' && 'Dashboard Overview'}
+                {activeSection === 'users' && 'User Management'}
+                {activeSection === 'companies' && 'Company Management'}
+                {activeSection === 'mentors' && 'Mentor Management'}
+                {activeSection === 'employee-requests' && 'Employee Requests'}
+                {activeSection === 'jobs' && 'Job Management'}
+                {activeSection === 'analytics' && 'Analytics'}
+                {activeSection === 'settings' && 'Settings'}
+              </h1>
+              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500">
+                <span>•</span>
+                <span>{currentTime.toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  month: 'short', 
+                  day: 'numeric' 
+                })}</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {/* Search Bar */}
+              <div className="hidden md:flex items-center bg-white/80 backdrop-blur-sm rounded-xl px-4 py-3 w-80 shadow-lg border border-gray-200/50 hover:shadow-xl transition-all duration-300">
+                <Search className="w-5 h-5 text-gray-400 mr-3" />
+                <input 
+                  type="text" 
+                  placeholder="Search users, companies, mentors..." 
+                  value={globalSearch}
+                  onChange={(e) => handleGlobalSearch(e.target.value)}
+                  className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none flex-1 font-medium"
+                />
+                {globalSearch && (
+                  <button 
+                    onClick={() => handleGlobalSearch('')}
+                    className="ml-2 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
+              </div>
+              
+              {/* Notifications */}
+              <div className="relative">
+                <button className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200">
+                  <Bell className="w-5 h-5 text-gray-600" />
+                  {notifications > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                      {notifications}
+                    </span>
+                  )}
+                </button>
+              </div>
+              
+              {/* Admin Profile in Header */}
+              <div className="flex items-center space-x-3 bg-gray-100 rounded-lg px-3 py-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <div className="hidden md:block">
+                  <p className="text-sm font-medium text-gray-900">
+                    {localStorage.getItem('userName')?.split(' ')[0] || 'Admin'}
+                  </p>
+                  <p className="text-xs text-gray-500">Administrator</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="p-8">
+          {/* Welcome Header for Overview */}
           {activeSection === 'overview' && (
-            <div className="mb-8">
-              <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-3xl font-bold mb-2">
-                      Welcome back, <span className="text-yellow-300">{localStorage.getItem('userName')?.split(' ')[0] || 'Admin'}</span>! 👋
-                    </h1>
-                    <p className="text-blue-100 text-lg">
-                      {currentTime.getHours() < 12 ? 'Good morning' : 
-                       currentTime.getHours() < 17 ? 'Good afternoon' : 'Good evening'}! Here's your platform overview for today.
-                    </p>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8"
+            >
+              <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-3xl p-8 text-white shadow-2xl">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-10">
+                  <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-20 -translate-y-20"></div>
+                  <div className="absolute bottom-0 right-0 w-60 h-60 bg-white rounded-full translate-x-20 translate-y-20"></div>
+                  <div className="absolute top-1/2 left-1/2 w-32 h-32 bg-white rounded-full -translate-x-16 -translate-y-16"></div>
+                </div>
+                
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center mb-4">
+                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4">
+                        <Zap className="w-8 h-8 text-yellow-300" />
+                      </div>
+                      <div>
+                        <h2 className="text-4xl font-bold mb-1">
+                          Welcome back, <span className="text-yellow-300">{localStorage.getItem('userName')?.split(' ')[0] || 'Admin'}</span>! 
+                        </h2>
+                        <p className="text-blue-100 text-xl font-medium">
+                          {currentTime.getHours() < 12 ? 'Good morning' : 
+                           currentTime.getHours() < 17 ? 'Good afternoon' : 'Good evening'}! Here's your platform overview for today.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Quick Stats Row */}
+                    <div className="flex items-center space-x-6 mt-6">
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2">
+                        <div className="flex items-center space-x-2">
+                          <Activity className="w-4 h-4 text-green-300" />
+                          <span className="text-sm font-medium text-green-300">System Online</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2">
+                        <div className="flex items-center space-x-2">
+                          <Users className="w-4 h-4 text-blue-300" />
+                          <span className="text-sm font-medium text-blue-300">{stats.overview?.totalUsers || 0} Active Users</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2">
+                        <div className="flex items-center space-x-2">
+                          <TrendingUp className="w-4 h-4 text-yellow-300" />
+                          <span className="text-sm font-medium text-yellow-300">Growth +12%</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
+                  
                   <div className="text-right">
-                    <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-3">
-                      <p className="text-white/90 text-sm font-medium">
-                        {currentTime.toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </p>
-                      <p className="text-white font-bold text-lg">
-                        {currentTime.toLocaleTimeString('en-US', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </p>
+                    <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-6 py-4 border border-white/20">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <Calendar className="w-5 h-5 text-white/80" />
+                        <p className="text-white/90 text-sm font-medium">
+                          {currentTime.toLocaleDateString('en-US', { 
+                            weekday: 'long', 
+                            month: 'long', 
+                            day: 'numeric' 
+                          })}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Clock className="w-5 h-5 text-white/80" />
+                        <p className="text-white font-bold text-xl">
+                          {currentTime.toLocaleTimeString('en-US', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
-          {/* Section Headers for other pages */}
+          {/* Section Description for non-overview pages */}
           {activeSection !== 'overview' && (
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-1">
-                  {activeSection === 'users' && 'User Management'}
-                  {activeSection === 'companies' && 'Company Management'}
-                  {activeSection === 'mentors' && 'Mentor Management'}
-                  {activeSection === 'jobs' && 'Job Management'}
-                  {activeSection === 'analytics' && 'Analytics'}
-                  {activeSection === 'settings' && 'Settings'}
-                </h1>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  {activeSection === 'users' && <span>Manage user accounts and permissions</span>}
-                  {activeSection === 'companies' && <span>Oversee company registrations and verifications</span>}
-                  {activeSection === 'mentors' && <span>Add and manage mentors on the platform</span>}
-                  {activeSection === 'jobs' && <span>Monitor job postings and applications</span>}
-                  {activeSection === 'analytics' && <span>Analyze platform data and trends</span>}
-                  {activeSection === 'settings' && <span>Configure system settings and preferences</span>}
-                </div>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6"
+            >
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                <p className="text-gray-600">
+                  {activeSection === 'users' && 'Manage user accounts, permissions, and monitor user activity across the platform.'}
+                  {activeSection === 'companies' && 'Oversee company registrations, verifications, and manage corporate partnerships.'}
+                  {activeSection === 'mentors' && 'Add new mentors, manage existing mentor profiles, and monitor mentorship activities.'}
+                  {activeSection === 'employee-requests' && 'Review and approve employee access requests from individuals wanting to join registered companies.'}
+                  {activeSection === 'jobs' && 'Monitor job postings, track applications, and manage employment opportunities.'}
+                  {activeSection === 'analytics' && 'Analyze platform data, user engagement, and generate comprehensive reports.'}
+                  {activeSection === 'settings' && 'Configure system settings, preferences, and platform-wide configurations.'}
+                </p>
               </div>
-              
-              {/* Header Actions for other sections */}
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <button className="p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200">
-                    <Bell className="w-5 h-5 text-gray-600" />
-                    {notifications > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                        {notifications}
-                      </span>
-                    )}
-                  </button>
-                </div>
-                <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm font-medium text-gray-700">
-                      {currentTime.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </motion.div>
           )}
-        </motion.div>
 
         {/* Overview Section */}
         {activeSection === 'overview' && (
@@ -558,42 +783,51 @@ const AdminDashboard = () => {
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                className="bg-white/60 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-white/20"
               >
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2 bg-white rounded-lg px-4 py-2 shadow-sm border">
-                    <Calendar className="w-4 h-4 text-gray-500" />
-                    <select className="text-sm font-medium text-gray-700 bg-transparent border-none outline-none">
-                      <option>Last 30 days</option>
-                      <option>Last 7 days</option>
-                      <option>Today</option>
-                    </select>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Time Period Filter */}
+                    <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg px-3 py-2 border border-blue-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <select className="text-sm font-medium text-blue-700 bg-transparent border-none outline-none cursor-pointer">
+                        <option>Last 30 days</option>
+                        <option>Last 7 days</option>
+                        <option>Today</option>
+                      </select>
+                    </div>
+                    
+                    {/* Refresh Button */}
+                    <button 
+                      onClick={() => {
+                        fetchStats();
+                        fetchRecentUsers();
+                      }}
+                      className="flex items-center space-x-2 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg px-3 py-2 shadow-sm border border-gray-200/50 transition-all duration-200 hover:shadow-md group"
+                    >
+                      <RefreshCw className="w-4 h-4 text-gray-600 group-hover:rotate-180 transition-transform duration-500" />
+                      <span className="text-sm font-medium text-gray-700">Refresh</span>
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => {
-                      fetchStats();
-                      fetchRecentUsers();
-                    }}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-lg px-4 py-2 shadow-md border border-gray-300 transition-all duration-200 hover:shadow-lg"
-                  >
-                    <RefreshCw className="w-4 h-4 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-700">Refresh</span>
-                  </button>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <button className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg px-4 py-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
-                    <Download className="w-4 h-4" />
-                    <span className="text-sm font-medium">Export Report</span>
-                  </button>
-                  <button className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg px-4 py-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
-                    <Users className="w-4 h-4" />
-                    <span className="text-sm font-medium">Add User</span>
-                  </button>
+                  
+                  <div className="flex items-center space-x-2">
+                    {/* Export Button */}
+                    <button className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg px-4 py-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                      <Download className="w-4 h-4" />
+                      <span className="text-sm font-medium">Export</span>
+                    </button>
+                    
+                    {/* Add User Button */}
+                    <button className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg px-4 py-2 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                      <Plus className="w-4 h-4" />
+                      <span className="text-sm font-medium">Add User</span>
+                    </button>
+                  </div>
                 </div>
               </motion.div>
 
               {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   {
                     title: 'Total Users',
@@ -601,7 +835,8 @@ const AdminDashboard = () => {
                     change: '+12%',
                     changeType: 'positive',
                     icon: Users,
-                    color: 'blue'
+                    color: 'blue',
+                    description: 'Active platform users'
                   },
                   {
                     title: 'Active Jobs',
@@ -609,7 +844,8 @@ const AdminDashboard = () => {
                     change: '+8%',
                     changeType: 'positive',
                     icon: Briefcase,
-                    color: 'green'
+                    color: 'green',
+                    description: 'Open positions'
                   },
                   {
                     title: 'Companies',
@@ -617,7 +853,8 @@ const AdminDashboard = () => {
                     change: '+15%',
                     changeType: 'positive',
                     icon: Building,
-                    color: 'purple'
+                    color: 'purple',
+                    description: 'Registered employers'
                   },
                   {
                     title: 'Mentors',
@@ -625,7 +862,8 @@ const AdminDashboard = () => {
                     change: '+18%',
                     changeType: 'positive',
                     icon: GraduationCap,
-                    color: 'indigo'
+                    color: 'indigo',
+                    description: 'Available mentors'
                   }
                 ].map((metric, index) => (
                   <motion.div
@@ -639,48 +877,39 @@ const AdminDashboard = () => {
                       metric.color === 'purple' ? 'from-purple-50 to-purple-100 border-purple-200 hover:from-purple-100 hover:to-purple-200' :
                       metric.color === 'indigo' ? 'from-indigo-50 to-indigo-100 border-indigo-200 hover:from-indigo-100 hover:to-indigo-200' :
                       'from-orange-50 to-orange-100 border-orange-200 hover:from-orange-100 hover:to-orange-200'
-                    } rounded-xl border-2 p-6 hover:shadow-xl transition-all duration-300 group relative overflow-hidden`}
+                    } rounded-xl border-2 p-4 hover:shadow-lg transition-all duration-300 group relative overflow-hidden`}
                   >
-                    <div className={`absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${
-                      metric.color === 'blue' ? 'from-blue-400 to-blue-600' :
-                      metric.color === 'green' ? 'from-green-400 to-green-600' :
-                      metric.color === 'purple' ? 'from-purple-400 to-purple-600' :
-                      metric.color === 'indigo' ? 'from-indigo-400 to-indigo-600' :
-                      'from-orange-400 to-orange-600'
-                    }`}></div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`p-2 rounded-lg ${
+                        metric.color === 'blue' ? 'bg-blue-500 text-white shadow-blue-200' :
+                        metric.color === 'green' ? 'bg-green-500 text-white shadow-green-200' :
+                        metric.color === 'purple' ? 'bg-purple-500 text-white shadow-purple-200' :
+                        metric.color === 'indigo' ? 'bg-indigo-500 text-white shadow-indigo-200' :
+                        'bg-orange-500 text-white shadow-orange-200'
+                      } shadow-lg`}>
+                        <metric.icon className="w-5 h-5" />
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        metric.changeType === 'positive' 
+                          ? 'bg-emerald-500 text-white' 
+                          : 'bg-red-500 text-white'
+                      }`}>
+                        {metric.changeType === 'positive' ? (
+                          <TrendingUp className="w-3 h-3 inline mr-1" />
+                        ) : (
+                          <TrendingDown className="w-3 h-3 inline mr-1" />
+                        )}
+                        {metric.change}
+                      </div>
+                    </div>
                     
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`p-3 rounded-xl ${
-                          metric.color === 'blue' ? 'bg-blue-500 text-white shadow-blue-200' :
-                          metric.color === 'green' ? 'bg-green-500 text-white shadow-green-200' :
-                          metric.color === 'purple' ? 'bg-purple-500 text-white shadow-purple-200' :
-                          metric.color === 'indigo' ? 'bg-indigo-500 text-white shadow-indigo-200' :
-                          'bg-orange-500 text-white shadow-orange-200'
-                        } shadow-lg transition-all duration-300 group-hover:scale-110`}>
-                          <metric.icon className="w-6 h-6" />
-                        </div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          metric.changeType === 'positive' 
-                            ? 'bg-emerald-500 text-white shadow-emerald-200' 
-                            : 'bg-red-500 text-white shadow-red-200'
-                        } shadow-lg transition-all duration-300`}>
-                          {metric.changeType === 'positive' ? (
-                            <TrendingUp className="w-3 h-3 inline mr-1" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3 inline mr-1" />
-                          )}
-                          {metric.change}
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <p className="text-sm font-medium text-gray-600 mb-1">{metric.title}</p>
-                        <p className="text-3xl font-bold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors duration-300">
-                          {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
-                        </p>
-                        <p className="text-xs text-gray-500">vs last month</p>
-                      </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 mb-1">{metric.title}</p>
+                      <p className="text-2xl font-bold text-gray-900 mb-1">
+                        {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
+                      </p>
+                      <p className="text-xs text-gray-500">{metric.description}</p>
+                      <p className="text-xs text-gray-400 mt-1">vs last month</p>
                     </div>
                   </motion.div>
                 ))}
@@ -693,105 +922,208 @@ const AdminDashboard = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="lg:col-span-2 bg-gradient-to-br from-white to-blue-50/30 rounded-xl border-2 border-blue-100 shadow-lg"
+                  className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl hover:shadow-2xl transition-all duration-300"
                 >
-                  <div className="px-6 py-4 border-b border-blue-200 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-xl">
+                  <div className="px-6 py-5 border-b border-gray-200/50 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white rounded-t-2xl">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold flex items-center">
-                        <Users className="w-5 h-5 mr-2" />
-                        Recent Users
-                      </h3>
-                      <button 
-                        onClick={() => setActiveSection('users')}
-                        className="text-sm text-blue-100 hover:text-white font-medium bg-white/20 px-3 py-1 rounded-lg hover:bg-white/30 transition-colors"
-                      >
-                        View all
-                      </button>
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                          <Users className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold">Recent Users</h3>
+                          <p className="text-blue-100 text-sm font-medium">Latest platform registrations</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        {globalSearch && (
+                          <div className="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1">
+                            <Search className="w-4 h-4" />
+                            <span className="text-sm font-medium">Filtered</span>
+                          </div>
+                        )}
+                        <button 
+                          onClick={() => setActiveSection('users')}
+                          className="flex items-center space-x-2 text-sm text-blue-100 hover:text-white font-semibold bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl transition-all duration-200 backdrop-blur-sm"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>View All</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            <div className="flex items-center space-x-2">
+                              <User className="w-4 h-4" />
+                              <span>User</span>
+                            </div>
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            <div className="flex items-center space-x-2">
+                              <Shield className="w-4 h-4" />
+                              <span>Role</span>
+                            </div>
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            <div className="flex items-center space-x-2">
+                              <Activity className="w-4 h-4" />
+                              <span>Status</span>
+                            </div>
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            <div className="flex items-center space-x-2">
+                              <Calendar className="w-4 h-4" />
+                              <span>Joined</span>
+                            </div>
+                          </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="bg-white/50 backdrop-blur-sm divide-y divide-gray-100">
                         {recentUsersLoading ? (
                           <tr>
-                            <td colSpan="4" className="px-6 py-8 text-center">
+                            <td colSpan="4" className="px-6 py-12 text-center">
                               <div className="flex flex-col items-center">
-                                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mb-4" />
-                                <p className="text-gray-500 text-sm">Loading recent users...</p>
+                                <div className="relative">
+                                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                                    <RefreshCw className="w-8 h-8 text-white animate-spin" />
+                                  </div>
+                                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl animate-pulse opacity-20"></div>
+                                </div>
+                                <p className="text-gray-600 text-lg font-semibold mb-2">Loading Recent Users</p>
+                                <p className="text-gray-400 text-sm">Fetching the latest platform registrations...</p>
                               </div>
                             </td>
                           </tr>
                         ) : recentUsers.length > 0 ? recentUsers.map((user, index) => (
-                          <tr key={user._id || index} className="hover:bg-gray-50 transition-colors duration-200">
-                            <td className="px-6 py-4 whitespace-nowrap">
+                          <motion.tr 
+                            key={user._id || index} 
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className="hover:bg-blue-50/50 hover:shadow-sm transition-all duration-200 group"
+                          >
+                            <td className="px-6 py-5 whitespace-nowrap">
                               <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10">
-                                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                                    user.role === 'employer' 
-                                      ? 'bg-gradient-to-r from-purple-500 to-purple-600' 
+                                <div className="flex-shrink-0 h-12 w-12">
+                                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg transition-all duration-200 group-hover:scale-105 ${
+                                    (user.role === 'employer' || user.role === 'company')
+                                      ? 'bg-gradient-to-br from-purple-500 to-purple-600 shadow-purple-200' 
                                       : user.role === 'mentor'
-                                      ? 'bg-gradient-to-r from-indigo-500 to-indigo-600'
-                                      : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                                      ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-indigo-200'
+                                      : 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-blue-200'
                                   }`}>
                                     {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
                                   </div>
                                 </div>
                                 <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">
+                                  <div className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
                                     {user.name || 'Unknown User'}
                                   </div>
-                                  <div className="text-sm text-gray-500">{user.email}</div>
+                                  <div className="text-sm text-gray-500 font-medium">{user.email}</div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                                user.role === 'employer' 
-                                  ? 'bg-purple-100 text-purple-800' 
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-3 py-2 text-xs font-bold rounded-xl shadow-sm transition-all duration-200 group-hover:scale-105 ${
+                                (user.role === 'employer' || user.role === 'company')
+                                  ? 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800 shadow-purple-100' 
                                   : user.role === 'mentor'
-                                  ? 'bg-indigo-100 text-indigo-800'
+                                  ? 'bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-800 shadow-indigo-100'
                                   : user.role === 'admin'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-blue-100 text-blue-800'
+                                  ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 shadow-red-100'
+                                  : 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 shadow-blue-100'
                               }`}>
-                                {user.role === 'employer' ? 'Employer' : 
-                                 user.role === 'mentor' ? 'Mentor' :
-                                 user.role === 'admin' ? 'Admin' : 'Job Seeker'}
+                                {(user.role === 'employer' || user.role === 'company') ? (
+                                  <>
+                                    <Building className="w-3 h-3 mr-1" />
+                                    Company
+                                  </>
+                                ) : user.role === 'mentor' ? (
+                                  <>
+                                    <GraduationCap className="w-3 h-3 mr-1" />
+                                    Mentor
+                                  </>
+                                ) : user.role === 'admin' ? (
+                                  <>
+                                    <Shield className="w-3 h-3 mr-1" />
+                                    Admin
+                                  </>
+                                ) : (
+                                  <>
+                                    <User className="w-3 h-3 mr-1" />
+                                    Job Seeker
+                                  </>
+                                )}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-3 py-2 text-xs font-bold rounded-xl shadow-sm transition-all duration-200 group-hover:scale-105 ${
                                 user.isActive 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
+                                  ? 'bg-gradient-to-r from-green-100 to-emerald-200 text-green-800 shadow-green-100' 
+                                  : 'bg-gradient-to-r from-red-100 to-pink-200 text-red-800 shadow-red-100'
                               }`}>
-                                {user.isActive ? 'Active' : 'Inactive'}
+                                {user.isActive ? (
+                                  <>
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Active
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertCircle className="w-3 h-3 mr-1" />
+                                    Inactive
+                                  </>
+                                )}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                            <td className="px-6 py-5 whitespace-nowrap">
+                              <div className="flex items-center space-x-2 text-sm text-gray-600 font-medium">
+                                <Clock className="w-4 h-4 text-gray-400" />
+                                <span>{user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { 
+                                  month: 'short', 
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                }) : 'Unknown'}</span>
+                              </div>
                             </td>
-                          </tr>
+                          </motion.tr>
                         )) : (
                           <tr>
-                            <td colSpan="4" className="px-6 py-8 text-center">
+                            <td colSpan="4" className="px-6 py-12 text-center">
                               <div className="flex flex-col items-center">
-                                <Users className="w-12 h-12 text-gray-300 mb-4" />
-                                <p className="text-gray-500 text-sm">No recent users found</p>
-                                <button 
-                                  onClick={fetchRecentUsers}
-                                  className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                                >
-                                  Refresh
-                                </button>
+                                <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                                  <Users className="w-10 h-10 text-gray-400" />
+                                </div>
+                                <p className="text-gray-600 text-lg font-semibold mb-2">
+                                  {globalSearch ? 'No matching users found' : 'No recent users found'}
+                                </p>
+                                <p className="text-gray-400 text-sm mb-4">
+                                  {globalSearch 
+                                    ? `No users match your search for "${globalSearch}"`
+                                    : 'New user registrations will appear here'
+                                  }
+                                </p>
+                                <div className="flex items-center space-x-3">
+                                  {globalSearch && (
+                                    <button 
+                                      onClick={() => handleGlobalSearch('')}
+                                      className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors font-medium"
+                                    >
+                                      <X className="w-4 h-4" />
+                                      <span>Clear Search</span>
+                                    </button>
+                                  )}
+                                  <button 
+                                    onClick={fetchRecentUsers}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                    <span>Refresh</span>
+                                  </button>
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -827,9 +1159,9 @@ const AdminDashboard = () => {
                         >
                           <div className="flex-shrink-0">
                             <div className={`p-2 rounded-lg ${
-                              user.role === 'employer' ? 'bg-purple-100' : 'bg-blue-100'
+                              (user.role === 'employer' || user.role === 'company') ? 'bg-purple-100' : 'bg-blue-100'
                             }`}>
-                              {user.role === 'employer' ? (
+                              {(user.role === 'employer' || user.role === 'company') ? (
                                 <Building className="w-4 h-4 text-purple-600" />
                               ) : (
                                 <UserCheck className="w-4 h-4 text-blue-600" />
@@ -838,7 +1170,7 @@ const AdminDashboard = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-gray-900 font-medium">
-                              {user.role === 'employer' ? 'New company registered' : 'New user registered'}
+                              {(user.role === 'employer' || user.role === 'company') ? 'New company registered' : 'New user registered'}
                             </p>
                             <p className="text-xs text-gray-600 truncate">
                               {user.name} ({user.email})
@@ -1087,14 +1419,14 @@ const AdminDashboard = () => {
                               <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold shadow-sm ${
                                 user.role === 'jobseeker'
                                   ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800'
-                                  : user.role === 'employer'
+                                  : (user.role === 'employer' || user.role === 'company')
                                   ? 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800'
                                   : 'bg-gradient-to-r from-red-100 to-red-200 text-red-800'
                               }`}>
                                 {user.role === 'jobseeker' && <User className="w-3 h-3 mr-1" />}
-                                {user.role === 'employer' && <Building className="w-3 h-3 mr-1" />}
+                                {(user.role === 'employer' || user.role === 'company') && <Building className="w-3 h-3 mr-1" />}
                                 {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
-                                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                                {(user.role === 'employer' || user.role === 'company') ? 'Company' : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                               </span>
                             </td>
                             <td className="px-6 py-5 whitespace-nowrap">
@@ -1797,6 +2129,235 @@ const AdminDashboard = () => {
           </AnimatePresence>
         )}
 
+        {/* Employee Requests Section */}
+        {activeSection === 'employee-requests' && (
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="employee-requests"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Employee Requests Header */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Employee Requests</h3>
+                    <p className="text-sm text-gray-600 mt-1">Review and manage employee access requests</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <select
+                      className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                    >
+                      <option value="">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => fetchEmployeeRequests(currentPage)}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-xl hover:from-teal-700 hover:to-teal-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="font-medium">Refresh</span>
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Employee Requests Table */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                  </div>
+                ) : employeeRequests.length === 0 ? (
+                  <div className="text-center py-12">
+                    <UserCheck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Employee Requests</h3>
+                    <p className="text-gray-500">No employee requests found matching your criteria.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Applicant
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Company
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            ID Card
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Applied Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white/30 divide-y divide-gray-200">
+                        {employeeRequests.map((request) => (
+                          <motion.tr 
+                            key={request._id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="hover:bg-white/50 transition-colors"
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{request.fullName}</div>
+                                <div className="text-sm text-gray-500">{request.email}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{request.companyId?.name || 'N/A'}</div>
+                              <div className="text-sm text-gray-500">{request.companyId?.email || 'N/A'}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <button
+                                onClick={() => window.open(request.companyIdCard, '_blank')}
+                                className="flex items-center space-x-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                                <span className="text-sm">View ID</span>
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                request.status === 'approved' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : request.status === 'rejected'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(request.createdAt)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              {request.status === 'pending' ? (
+                                <div className="flex space-x-2">
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => updateEmployeeRequestStatus(request._id, 'approved')}
+                                    className="flex items-center space-x-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                    <span>Approve</span>
+                                  </motion.button>
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => {
+                                      const reason = prompt('Enter rejection reason (optional):');
+                                      updateEmployeeRequestStatus(request._id, 'rejected', reason || '');
+                                    }}
+                                    className="flex items-center space-x-1 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    <span>Reject</span>
+                                  </motion.button>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">
+                                  {request.status === 'approved' ? 'Approved' : 'Rejected'}
+                                  {request.reviewedAt && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      on {formatDate(request.reviewedAt)}
+                                    </div>
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {employeeRequests.length > 0 && pagination.totalPages > 1 && (
+                  <div className="bg-white/50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={!pagination.hasPrev}
+                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                        disabled={!pagination.hasNext}
+                        className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Showing{' '}
+                          <span className="font-medium">
+                            {((currentPage - 1) * 10) + 1}
+                          </span>{' '}
+                          to{' '}
+                          <span className="font-medium">
+                            {Math.min(currentPage * 10, pagination.totalRequests || 0)}
+                          </span>{' '}
+                          of <span className="font-medium">{pagination.totalRequests || 0}</span> results
+                        </p>
+                      </div>
+                      <div>
+                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={!pagination.hasPrev}
+                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                            disabled={!pagination.hasNext}
+                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                        </nav>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        )}
+
         {/* Jobs Section */}
         {activeSection === 'jobs' && (
           <AnimatePresence mode="wait">
@@ -1952,6 +2513,7 @@ const AdminDashboard = () => {
             </motion.div>
           </AnimatePresence>
         )}
+        </div>
       </div>
 
       {/* Success Popup */}

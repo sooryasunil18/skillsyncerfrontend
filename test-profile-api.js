@@ -19,7 +19,7 @@ const testEmployer = {
   name: 'Jane Smith',
   email: 'jane.smith@company.com',
   password: 'password123',
-  role: 'employer'
+  role: 'company'
 };
 
 const profileUpdateData = {

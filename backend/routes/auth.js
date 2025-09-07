@@ -89,7 +89,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Role validation
-    const validRoles = ['jobseeker', 'employer', 'mentor'];
+    const validRoles = ['jobseeker', 'employer', 'company', 'mentor'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
@@ -265,7 +265,7 @@ router.post('/register-company', async (req, res) => {
       name: companyName,
       email,
       password,
-      role: 'employer',
+      role: 'company',
       company: {
         name: companyName,
         phone,
@@ -451,7 +451,7 @@ router.put('/profile', protect, async (req, res) => {
       if (profile.portfolio !== undefined) user.profile.portfolio = profile.portfolio;
     }
 
-    if (user.role === 'employer' && company) {
+    if ((user.role === 'employer' || user.role === 'company') && company) {
       if (company.name !== undefined) user.company.name = company.name;
       if (company.description !== undefined) user.company.description = company.description;
       if (company.website !== undefined) user.company.website = company.website;

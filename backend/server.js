@@ -15,6 +15,8 @@ const corsOptions = {
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true,
@@ -70,7 +72,7 @@ const connectDB = async () => {
 connectDB();
 
 // Import routes after ensuring modules are loaded
-let authRoutes, jobseekerRoutes, adminRoutes;
+let authRoutes, jobseekerRoutes, adminRoutes, employerRoutes, companiesRoutes;
 
 try {
   authRoutes = require('./routes/auth');
@@ -91,6 +93,20 @@ try {
   console.log('✅ Admin routes loaded');
 } catch (error) {
   console.error('❌ Error loading admin routes:', error.message);
+}
+
+try {
+  employerRoutes = require('./routes/employer');
+  console.log('✅ Employer routes loaded');
+} catch (error) {
+  console.error('❌ Error loading employer routes:', error.message);
+}
+
+try {
+  companiesRoutes = require('./routes/companies');
+  console.log('✅ Companies routes loaded');
+} catch (error) {
+  console.error('❌ Error loading companies routes:', error.message);
 }
 
 // Routes
@@ -115,6 +131,21 @@ if (adminRoutes) {
   console.log('⚠️  Admin routes not available');
 }
 
+if (employerRoutes) {
+  app.use('/api/employer', employerRoutes);
+  console.log('✅ Employer routes registered');
+} else {
+  console.log('⚠️  Employer routes not available');
+}
+
+if (companiesRoutes) {
+  app.use('/api/companies', companiesRoutes);
+  app.use('/api/employee-requests', companiesRoutes);
+  console.log('✅ Companies routes registered');
+} else {
+  console.log('⚠️  Companies routes not available');
+}
+
 // Test route that doesn't require auth
 app.get('/api/test', (req, res) => {
   res.json({
@@ -124,7 +155,8 @@ app.get('/api/test', (req, res) => {
     routes: {
       auth: !!authRoutes,
       jobseeker: !!jobseekerRoutes,
-      admin: !!adminRoutes
+      admin: !!adminRoutes,
+      employer: !!employerRoutes
     }
   });
 });
@@ -137,7 +169,7 @@ app.use((req, res) => {
     message: 'Route not found',
     path: req.path,
     method: req.method,
-    availableRoutes: ['/api/health', '/api/test', '/api/auth/*', '/api/jobseeker/*', '/api/admin/*']
+    availableRoutes: ['/api/health', '/api/test', '/api/auth/*', '/api/jobseeker/*', '/api/admin/*', '/api/employer/*']
   });
 });
 

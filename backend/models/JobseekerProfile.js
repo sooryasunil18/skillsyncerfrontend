@@ -82,7 +82,12 @@ const JobseekerProfileSchema = new mongoose.Schema(
           skillMatch: { type: Number, default: 0 },
           educationMatch: { type: Number, default: 0 },
           experienceMatch: { type: Number, default: 0 },
-          jobSimilarity: { type: Number, default: 0 }
+          jobSimilarity: { type: Number, default: 0 },
+          keywordCoverage: { type: Number, default: 0 },
+          formattingCompliance: { type: Number, default: 0 },
+          actionVerbs: { type: Number, default: 0 },
+          quantifiableResults: { type: Number, default: 0 },
+          structureCompliance: { type: Number, default: 0 }
         },
         suggestions: [
           new mongoose.Schema(
@@ -95,7 +100,20 @@ const JobseekerProfileSchema = new mongoose.Schema(
           )
         ]
       },
-      lastAnalyzedAt: { type: Date }
+      lastAnalyzedAt: { type: Date },
+      history: [
+        new mongoose.Schema(
+          {
+            analyzedAt: { type: Date, default: Date.now },
+            score: { type: Number, default: 0 },
+            details: {
+              type: Object,
+              default: {}
+            }
+          },
+          { _id: false }
+        )
+      ]
     }
   },
   { timestamps: true }

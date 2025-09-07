@@ -69,7 +69,7 @@
   - ✅ Contains at least one number
 
 - **Role Validation**:
-  - ✅ Must be valid role (jobseeker/employer/mentor)
+  - ✅ Must be valid role (jobseeker/employer/company/mentor)
 
 #### **Company Registration Endpoint**
 - **Company Name Validation**:

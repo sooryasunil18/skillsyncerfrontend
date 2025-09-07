@@ -138,7 +138,7 @@ Authorization: Bearer <your-jwt-token>
       "profileCompletion": 85,
       "createdAt": "2024-01-01T00:00:00.000Z"
     },
-    "viewerRole": "employer",
+    "viewerRole": "company",
     "canContact": true
   }
 }
@@ -258,7 +258,7 @@ The profile completion percentage is calculated based on 12 fields:
 ```json
 {
   "success": false,
-  "message": "Access denied. Role 'employer' is not authorized for this action."
+  "message": "Access denied. Role 'company' is not authorized for this action."
 }
 ```
 
@@ -329,7 +329,7 @@ This will test all endpoints and validate the complete functionality.
 ## Security Features
 
 1. **JWT Authentication**: All endpoints require valid JWT tokens
-2. **Role-based Access Control**: Different access levels for jobseekers, employers, and admins
+2. **Role-based Access Control**: Different access levels for jobseekers, companies, and admins
 3. **Data Validation**: Comprehensive input validation and sanitization
 4. **Profile Privacy**: Jobseekers can control profile visibility
 5. **Selective Data Exposure**: Different data visibility based on viewer role

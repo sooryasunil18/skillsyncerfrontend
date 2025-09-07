@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const EmployeeRequest = require('../models/EmployeeRequest');
 const { protect } = require('../middleware/auth');
 const { sendMentorCredentials, sendNotificationEmail } = require('../utils/emailService');
 
@@ -198,8 +199,8 @@ router.get('/companies', [protect, adminAuth], async (req, res) => {
   try {
     const { status, industry, page = 1, limit = 10 } = req.query;
     
-    // Build filter object for employers
-    const filter = { role: 'employer' };
+    // Build filter object for employers and companies
+    const filter = { role: { $in: ['employer', 'company'] } };
     if (status) filter.isActive = status === 'active';
     if (industry) filter['company.industry'] = industry;
     
@@ -263,7 +264,7 @@ router.get('/stats', [protect, adminAuth], async (req, res) => {
     // Get user counts by role
     const totalUsers = await User.countDocuments();
     const jobseekers = await User.countDocuments({ role: 'jobseeker' });
-    const employers = await User.countDocuments({ role: 'employer' });
+    const employers = await User.countDocuments({ role: { $in: ['employer', 'company'] } });
     const mentors = await User.countDocuments({ role: 'mentor' });
     const activeUsers = await User.countDocuments({ isActive: true });
     const verifiedUsers = await User.countDocuments({ isEmailVerified: true });
@@ -277,7 +278,7 @@ router.get('/stats', [protect, adminAuth], async (req, res) => {
     
     // Get industry distribution for companies
     const industryStats = await User.aggregate([
-      { $match: { role: 'employer' } },
+      { $match: { role: { $in: ['employer', 'company'] } } },
       { $group: { _id: '$company.industry', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
@@ -401,6 +402,232 @@ router.post('/test-email', [protect, adminAuth], async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error sending test email',
+      error: error.message
+    });
+  }
+});
+
+// Get all employee requests
+router.get('/employee-requests', [protect, adminAuth], async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+    
+    // Build filter object
+    const filter = {};
+    if (status) filter.status = status;
+    
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    
+    // Fetch employee requests with pagination
+    const requests = await EmployeeRequest.find(filter)
+      .populate('companyId', 'name email')
+      .populate('reviewedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    // Get total count for pagination
+    const totalRequests = await EmployeeRequest.countDocuments(filter);
+    
+    res.json({
+      success: true,
+      data: {
+        requests,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalRequests / limit),
+          totalRequests,
+          hasNext: page * limit < totalRequests,
+          hasPrev: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching employee requests:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching employee requests',
+      error: error.message
+    });
+  }
+});
+
+// Update employee request status (approve/reject)
+router.patch('/employee-requests/:requestId/status', [protect, adminAuth], async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { status, adminNotes } = req.body;
+    
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be either approved or rejected'
+      });
+    }
+    
+    const request = await EmployeeRequest.findByIdAndUpdate(
+      requestId,
+      { 
+        status,
+        adminNotes: adminNotes || '',
+        reviewedBy: req.user._id,
+        reviewedAt: new Date()
+      },
+      { new: true }
+    ).populate('companyId', 'name email');
+    
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee request not found'
+      });
+    }
+
+    // If approved, create employee user account
+    if (status === 'approved') {
+      try {
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: request.email });
+        
+        if (!existingUser) {
+          // Generate password: first 3 letters of name + first 3 letters of company + 4 random digits
+          const generateEmployeePassword = (name, companyName) => {
+            const namePart = (name || '').replace(/\s+/g, '').substring(0, 3).toLowerCase();
+            const companyPart = (companyName || '').replace(/\s+/g, '').substring(0, 3).toLowerCase();
+            const randomDigits = Math.floor(1000 + Math.random() * 9000).toString();
+            return `${namePart}${companyPart}${randomDigits}`;
+          };
+
+          const autoGeneratedPassword = generateEmployeePassword(request.fullName, request.companyId.name);
+          
+          // Create employee user
+          const employee = await User.create({
+            name: request.fullName,
+            email: request.email,
+            password: autoGeneratedPassword,
+            role: 'employee',
+            isActive: true,
+            isEmailVerified: true,
+            employeeProfile: {
+              companyId: request.companyId._id,
+              joinDate: new Date()
+            }
+          });
+
+          // Send credentials email to employee
+          try {
+            const emailResult = await sendNotificationEmail(
+              request.email,
+              'Welcome to SkillSyncer - Employee Account Created',
+              `
+                <h2>Welcome to SkillSyncer!</h2>
+                <p>Dear ${request.fullName},</p>
+                <p>Your employee account has been approved and created successfully!</p>
+                <p><strong>Company:</strong> ${request.companyId.name}</p>
+                <p><strong>Login Credentials:</strong></p>
+                <ul>
+                  <li><strong>Email:</strong> ${request.email}</li>
+                  <li><strong>Password:</strong> ${autoGeneratedPassword}</li>
+                </ul>
+                <p>Please login to your account and change your password for security.</p>
+                <p>You can log in here: <a href="${process.env.FRONTEND_URL}/auth">${process.env.FRONTEND_URL}/auth</a></p>
+                <p>Welcome to the SkillSyncer family!</p>
+                <br>
+                <p>Best regards,<br>SkillSyncer Team</p>
+              `
+            );
+            
+            if (emailResult.success) {
+              console.log('Employee credentials email sent successfully');
+            } else {
+              console.error('Failed to send employee credentials email');
+            }
+          } catch (emailError) {
+            console.error('Error sending employee credentials email:', emailError);
+          }
+        }
+      } catch (userCreationError) {
+        console.error('Error creating employee user:', userCreationError);
+        // Don't fail the approval if user creation fails
+      }
+    }
+
+    // Send notification email to applicant
+    try {
+      if (status === 'approved') {
+        await sendNotificationEmail(
+          request.email,
+          'SkillSyncer Employee Request Approved',
+          `
+            <h2>Employee Request Update</h2>
+            <p>Dear ${request.fullName},</p>
+            <p>Your employee request has been approved! You will receive login credentials shortly.</p>
+            <p><strong>Company:</strong> ${request.companyId.name}</p>
+            <p><strong>Status:</strong> Approved</p>
+            <p>You can log in here: <a href="${process.env.FRONTEND_URL}/auth">${process.env.FRONTEND_URL}/auth</a></p>
+            <br>
+            <p>Best regards,<br>SkillSyncer Team</p>
+          `
+        );
+      } else {
+        await sendNotificationEmail(
+          request.email,
+          'SkillSyncer Employee Application Rejected',
+          `
+            <h2>Application Update</h2>
+            <p>Dear ${request.fullName},</p>
+            <p>We’re sorry — your employee application for <strong>${request.companyId.name}</strong> was not approved at this time.</p>
+            ${adminNotes ? `<p><strong>Reason provided:</strong> ${adminNotes}</p>` : ''}
+            <p>We appreciate your interest and encourage you to reapply in the future. Better luck next time!</p>
+            <p>If you believe this was a mistake or need more information, please reply to this email.</p>
+            <br>
+            <p>Best regards,<br>SkillSyncer Team</p>
+          `
+        );
+      }
+    } catch (emailError) {
+      console.error('Error sending status notification email:', emailError);
+    }
+    
+    res.json({
+      success: true,
+      message: `Employee request ${status} successfully`,
+      data: request
+    });
+  } catch (error) {
+    console.error('Error updating employee request status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating employee request status',
+      error: error.message
+    });
+  }
+});
+
+// Delete employee request
+router.delete('/employee-requests/:requestId', [protect, adminAuth], async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    
+    const request = await EmployeeRequest.findByIdAndDelete(requestId);
+    
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee request not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Employee request deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting employee request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting employee request',
       error: error.message
     });
   }

@@ -1,29 +1,9 @@
 // Robust API utility with error handling and retry logic
 
-const API_BASE_URL = 'http://localhost:5001';
+const API_BASE_URL = 'http://localhost:5003';
 
-// Function to detect if we're in development and try different ports
-const getApiUrl = async () => {
-  const ports = [5001, 5000, 5002];
-  
-  for (const port of ports) {
-    try {
-      const url = `http://localhost:${port}`;
-      const response = await fetch(`${url}/api/health`, { 
-        method: 'GET',
-        signal: AbortSignal.timeout(2000) // 2 second timeout
-      });
-      if (response.ok) {
-        console.log(`✅ Backend found on port ${port}`);
-        return url;
-      }
-    } catch (error) {
-      console.log(`❌ Port ${port} not available:`, error.message);
-    }
-  }
-  
-  // Fallback to default
-  console.log('⚠️ Using default port 5001');
+// Simplified API URL getter - use the correct port directly
+const getApiUrl = () => {
   return API_BASE_URL;
 };
 
@@ -33,7 +13,7 @@ export const apiRequest = async (endpoint, options = {}) => {
   let lastError;
   
   // Get the correct API URL
-  const baseUrl = await getApiUrl();
+  const baseUrl = getApiUrl();
   const url = `${baseUrl}${endpoint}`;
   
   // Default options
@@ -122,6 +102,96 @@ export const authApi = {
 
 export const dashboardApi = {
   getJobseekerDashboard: () => apiRequest('/api/jobseeker/dashboard'),
+};
+
+export const jobseekerApi = {
+  // Internship browsing and applications
+  getInternships: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value);
+      }
+    });
+    const url = `/api/jobseeker/internships${params.toString() ? `?${params.toString()}` : ''}`;
+    return apiRequest(url);
+  },
+  
+  getInternshipDetails: (id) => apiRequest(`/api/jobseeker/internships/${id}`),
+  
+  applyForInternship: (id, coverLetter = '') => apiRequest(`/api/jobseeker/internships/${id}/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ coverLetter }),
+  }),
+  
+  applyForInternshipDetailed: (id, applicationData) => apiRequest(`/api/jobseeker/internships/${id}/apply-detailed`, {
+    method: 'POST',
+    body: JSON.stringify(applicationData),
+  }),
+  
+  getApplications: () => apiRequest('/api/jobseeker/applications'),
+  
+  getDetailedApplications: () => apiRequest('/api/jobseeker/applications-detailed'),
+  
+  // Profile management
+  getProfile: () => apiRequest('/api/jobseeker/profile'),
+  updateProfile: (profileData) => apiRequest('/api/jobseeker/profile', {
+    method: 'PUT',
+    body: JSON.stringify(profileData),
+  }),
+  
+  // Resume upload
+  uploadResume: (formData) => apiRequest('/api/jobseeker/upload-resume', {
+    method: 'POST',
+    body: formData,
+    isFormData: true,
+  }),
+  
+  // ATS scoring
+  getATSScore: () => apiRequest('/api/jobseeker/ats-score'),
+  getATSNLP: (jobDescription = '') => apiRequest('/api/jobseeker/ats-nlp', {
+    method: 'POST',
+    body: JSON.stringify({ jobDescription }),
+  }),
+};
+
+export const employerApi = {
+  // Internship posting management
+  getInternships: () => apiRequest('/api/employer/internships'),
+  createInternship: (internshipData) => apiRequest('/api/employer/internships', {
+    method: 'POST',
+    body: JSON.stringify(internshipData),
+  }),
+  updateInternship: (id, internshipData) => apiRequest(`/api/employer/internships/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(internshipData),
+  }),
+  deleteInternship: (id) => apiRequest(`/api/employer/internships/${id}`, {
+    method: 'DELETE',
+  }),
+  
+  // Application management
+  getDetailedApplications: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value);
+      }
+    });
+    const url = `/api/employer/applications-detailed${params.toString() ? `?${params.toString()}` : ''}`;
+    return apiRequest(url);
+  },
+  
+  getApplicationDetails: (id) => apiRequest(`/api/employer/applications-detailed/${id}`),
+  
+  updateApplicationStatus: (id, status, notes = '') => apiRequest(`/api/employer/applications-detailed/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, notes }),
+  }),
+  
+  // Dropdown data
+  getInternshipTitles: (industry) => apiRequest(`/api/employer/internship-titles${industry ? `?industry=${encodeURIComponent(industry)}` : ''}`),
+  getIndiaLocations: () => apiRequest('/api/employer/india-locations'),
 };
 
 export const healthCheck = () => apiRequest('/api/health');

@@ -8,11 +8,13 @@ import Features from './pages/Features';
 import HowItWorks from './pages/HowItWorks';
 import Contact from './pages/Contact';
 import Auth from './pages/Auth';
+import EmployerInfo from './pages/EmployerInfo';
 import JobseekerDashboard from './pages/JobseekerDashboard';
 import EmployerDashboard from './pages/EmployerDashboard';
 import MentorDashboard from './pages/MentorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
+import EmployeeDashboard from './pages/EmployeeDashboard';
 import Footer from './components/Footer';
 
 // Layout component to conditionally render navbar and footer
@@ -24,6 +26,7 @@ function Layout() {
     '/jobseeker-dashboard',
     '/employer-dashboard',
     '/mentor-dashboard',
+    '/employee-dashboard',
     '/admin-dashboard',
     '/admin-login'
   ];
@@ -40,9 +43,11 @@ function Layout() {
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/employer-info" element={<EmployerInfo />} />
           <Route path="/jobseeker-dashboard" element={<JobseekerDashboard />} />
           <Route path="/employer-dashboard" element={<EmployerDashboard />} />
           <Route path="/mentor-dashboard" element={<MentorDashboard />} />
+          <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
         </Routes>

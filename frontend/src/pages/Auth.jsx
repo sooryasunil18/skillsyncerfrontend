@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
+import { API_BASE_URL } from '../config/api';
 import {
   Users,
   Eye,
@@ -252,7 +253,7 @@ const Auth = () => {
           phone: formData.companyPhone,
           industry: formData.industry,
           password: formData.password,
-          role: 'employer'
+          role: 'company'
         };
       } else {
         endpoint = '/api/auth/register';
@@ -260,11 +261,11 @@ const Auth = () => {
           name: formData.fullName,
           email: formData.email,
           password: formData.password,
-          role: selectedRole === 'company' ? 'employer' : selectedRole
+          role: selectedRole === 'company' ? 'company' : selectedRole
         };
       }
 
-      const response = await fetch(`http://localhost:5001${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -293,6 +294,8 @@ const Auth = () => {
             navigate('/mentor-dashboard');
           } else if (data.data.user.role === 'admin') {
             navigate('/admin-dashboard');
+          } else if (data.data.user.role === 'employee') {
+            navigate('/employee-dashboard');
           } else {
             navigate('/');
           }
@@ -360,7 +363,7 @@ const Auth = () => {
       const user = result.user;
 
       // Send user data to your backend
-      const response = await fetch('http://localhost:5001/api/auth/google-signin', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/google-signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

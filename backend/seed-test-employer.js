@@ -18,7 +18,7 @@ const seedTestEmployer = async () => {
         name: 'TechCorp Inc',
         email: 'hr@techcorp.com',
         password: 'password123',
-        role: 'employer',
+        role: 'company',
         isEmailVerified: true,
         isActive: true,
         company: {
@@ -36,7 +36,7 @@ const seedTestEmployer = async () => {
         name: 'HealthPlus Medical',
         email: 'careers@healthplus.com',
         password: 'password123',
-        role: 'employer',
+        role: 'company',
         isEmailVerified: true,
         isActive: true,
         company: {
@@ -54,7 +54,7 @@ const seedTestEmployer = async () => {
         name: 'EduTech Solutions',
         email: 'jobs@edutech.com',
         password: 'password123',
-        role: 'employer',
+        role: 'company',
         isEmailVerified: false,
         isActive: true,
         company: {
@@ -72,7 +72,7 @@ const seedTestEmployer = async () => {
         name: 'GreenEnergy Corp',
         email: 'hr@greenenergy.com',
         password: 'password123',
-        role: 'employer',
+        role: 'company',
         isEmailVerified: true,
         isActive: false,
         company: {
