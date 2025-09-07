@@ -264,7 +264,7 @@ InternshipApplicationSchema.statics.getApplicationsForEmployer = function(employ
 // Static method to get applications for a jobseeker
 InternshipApplicationSchema.statics.getApplicationsForJobseeker = function(jobseekerId) {
   return this.find({ jobseekerId })
-    .populate('internshipId', 'title companyName startDate duration status')
+    .populate('internshipId', 'title companyName startDate duration status location mode')
     .populate('employerId', 'name company.name')
     .sort({ appliedAt: -1 });
 };

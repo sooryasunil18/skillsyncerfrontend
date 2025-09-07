@@ -137,7 +137,8 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
           },
           additionalInfo: {
             ...prev.additionalInfo,
-            resumeUrl: user.profile?.resume || '',
+            // Prefer resume from extended JobseekerProfile if available
+            resumeUrl: (response.data?.data?.resumeUrl) || user.profile?.resume || '',
             portfolioUrl: user.profile?.portfolio || ''
           }
         }));
@@ -276,7 +277,8 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
           ...prev,
           additionalInfo: {
             ...prev.additionalInfo,
-            resumeUrl: response.data.resumeUrl
+            // API returns nested data: { success, data: { resumeUrl } }
+            resumeUrl: response.data?.data?.resumeUrl || ''
           }
         }));
         setResumeFile(file);
@@ -323,7 +325,7 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
 
     switch (step) {
       case 1: // Personal Details
-        if (!formData.personalDetails.fullName.trim()) {
+        if (!(formData.personalDetails.fullName || '').trim()) {
           newErrors['personalDetails.fullName'] = 'Full name is required';
         }
         if (!formData.personalDetails.dateOfBirth) {
@@ -332,25 +334,25 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
         if (!formData.personalDetails.gender) {
           newErrors['personalDetails.gender'] = 'Gender is required';
         }
-        if (!formData.personalDetails.contactNumber.trim()) {
+        if (!(formData.personalDetails.contactNumber || '').trim()) {
           newErrors['personalDetails.contactNumber'] = 'Contact number is required';
         }
-        if (!formData.personalDetails.emailAddress.trim()) {
+        if (!(formData.personalDetails.emailAddress || '').trim()) {
           newErrors['personalDetails.emailAddress'] = 'Email address is required';
         }
         break;
 
       case 2: // Education Details
-        if (!formData.educationDetails.highestQualification.trim()) {
+        if (!(formData.educationDetails.highestQualification || '').trim()) {
           newErrors['educationDetails.highestQualification'] = 'Highest qualification is required';
         }
-        if (!formData.educationDetails.institutionName.trim()) {
+        if (!(formData.educationDetails.institutionName || '').trim()) {
           newErrors['educationDetails.institutionName'] = 'Institution name is required';
         }
         if (!formData.educationDetails.yearOfGraduation) {
           newErrors['educationDetails.yearOfGraduation'] = 'Year of graduation is required';
         }
-        if (!formData.educationDetails.cgpaPercentage.trim()) {
+        if (!(formData.educationDetails.cgpaPercentage || '').trim()) {
           newErrors['educationDetails.cgpaPercentage'] = 'CGPA/Percentage is required';
         }
         break;
@@ -362,10 +364,10 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
         break;
 
       case 6: // Additional Information
-        if (!formData.additionalInfo.whyJoinInternship.trim()) {
+        if (!(formData.additionalInfo.whyJoinInternship || '').trim()) {
           newErrors['additionalInfo.whyJoinInternship'] = 'Please explain why you want to join this internship';
         }
-        if (!formData.additionalInfo.resumeUrl.trim()) {
+        if (!(formData.additionalInfo.resumeUrl || '').trim()) {
           newErrors['additionalInfo.resumeUrl'] = 'Resume is required';
         }
         break;
@@ -401,6 +403,10 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
 
     setLoading(true);
     try {
+      // Normalize eligibility to schema enum
+      const allowedEligibility = ['Freshers Only', 'Experienced Only', 'Both'];
+      const normalizedEligibility = allowedEligibility.includes(internship.eligibility) ? internship.eligibility : 'Both';
+
       const applicationData = {
         ...formData,
         internshipDetails: {
@@ -409,7 +415,7 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
           duration: internship.duration,
           startDate: internship.startDate,
           workMode: internship.mode === 'Online' ? 'Remote' : internship.mode === 'Offline' ? 'Onsite' : internship.mode,
-          eligibility: internship.eligibility || 'Both'
+          eligibility: normalizedEligibility
         }
       };
 
@@ -419,9 +425,10 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
         onSuccess?.();
         onClose();
       } else {
-        const errorMessage = response?.message || 'Failed to submit application';
-        console.error('Application submission failed:', errorMessage, response);
-        setErrors({ submit: errorMessage });
+        const errorMessage = response?.data?.message || response?.message || 'Failed to submit application';
+        const validation = response?.data?.errors;
+        console.error('Application submission failed:', errorMessage, validation || response);
+        setErrors({ submit: validation ? `${errorMessage}: ${validation.join(', ')}` : errorMessage });
       }
     } catch (error) {
       console.error('Error submitting application:', error);

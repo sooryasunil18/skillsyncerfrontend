@@ -131,6 +131,8 @@ const EmployerDashboard = () => {
     internshipId: '',
     search: ''
   });
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -406,16 +408,10 @@ const EmployerDashboard = () => {
       console.log('Applications response:', response);
       
       if (response.success && response.data) {
-        const applicationsData = response.data.success ? response.data.data : response.data;
-        console.log('Applications data:', applicationsData);
-        
-        if (Array.isArray(applicationsData)) {
-          setApplications(applicationsData);
-          console.log('Successfully set applications:', applicationsData.length, 'items');
-        } else {
-          console.warn('Response data is not an array:', applicationsData);
-          setApplications([]);
-        }
+        const payload = response.data.success ? response.data.data : response.data;
+        const applicationsArray = Array.isArray(payload?.applications) ? payload.applications : (Array.isArray(payload) ? payload : []);
+        console.log('Applications data (normalized):', applicationsArray);
+        setApplications(applicationsArray);
       } else {
         console.error('Failed to load applications:', response.data?.message || response.message || 'No data received');
         setError(`Failed to load applications: ${response.data?.message || response.message || 'No data received'}`);
@@ -446,6 +442,25 @@ const EmployerDashboard = () => {
       console.error('Error updating application status:', error);
       setError(`Error updating application: ${error.message}`);
       setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // View full application details
+  const viewApplicationDetails = async (applicationId) => {
+    try {
+      const response = await employerApi.getApplicationDetails(applicationId);
+      if (response.success && response.data) {
+        const payload = response.data.success ? response.data.data : response.data;
+        setSelectedApplication(payload);
+      } else {
+        // Fallback to existing item from list
+        setSelectedApplication(applications.find(a => a._id === applicationId) || null);
+      }
+    } catch (e) {
+      // Fallback to existing item from list on error
+      setSelectedApplication(applications.find(a => a._id === applicationId) || null);
+    } finally {
+      setShowApplicationModal(true);
     }
   };
 
@@ -1117,10 +1132,7 @@ const EmployerDashboard = () => {
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                            onClick={() => {
-                              // TODO: Implement view detailed application
-                              console.log('View application:', application._id);
-                            }}
+                            onClick={() => viewApplicationDetails(application._id)}
                           >
                             <Eye className="w-4 h-4 inline mr-1" />
                             View Details
@@ -1588,6 +1600,155 @@ const EmployerDashboard = () => {
             </nav>
           </motion.div>
         )}
+
+        {/* Application Details Modal */}
+        <AnimatePresence>
+          {showApplicationModal && selectedApplication && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              onClick={() => setShowApplicationModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">Application Details</h3>
+                  <button onClick={() => setShowApplicationModal(false)} className="text-gray-500 hover:text-gray-700">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-sm text-gray-700">
+                  <p>
+                    <span className="font-semibold">Candidate:</span> {selectedApplication.personalDetails?.fullName || 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Position:</span> {selectedApplication.internshipDetails?.title || selectedApplication.internshipId?.title || 'Internship'}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <p className="flex items-center"><Mail className="w-4 h-4 mr-1" /> {selectedApplication.personalDetails?.emailAddress || '—'}</p>
+                    <p className="flex items-center"><Phone className="w-4 h-4 mr-1" /> {selectedApplication.personalDetails?.contactNumber || '—'}</p>
+                    <p className="flex items-center"><MapPin className="w-4 h-4 mr-1" /> {selectedApplication.internshipId?.location || '—'}</p>
+                    <p className="flex items-center"><Clock className="w-4 h-4 mr-1" /> {selectedApplication.internshipId?.duration || selectedApplication.internshipDetails?.duration || '—'}</p>
+                  </div>
+
+                  {selectedApplication.additionalInfo?.resumeUrl && (
+                    <div className="mt-4">
+                      <a href={selectedApplication.additionalInfo.resumeUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                        View Submitted Resume
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Internship details extra */}
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <p><span className="font-semibold">Type:</span> {selectedApplication.internshipDetails?.type || '—'}</p>
+                    <p><span className="font-semibold">Start Date:</span> {selectedApplication.internshipDetails?.startDate ? new Date(selectedApplication.internshipDetails.startDate).toLocaleDateString() : '—'}</p>
+                    <p><span className="font-semibold">Work Mode:</span> {selectedApplication.internshipDetails?.workMode || selectedApplication.internshipId?.mode || '—'}</p>
+                    <p><span className="font-semibold">Eligibility:</span> {selectedApplication.internshipDetails?.eligibility || '—'}</p>
+                  </div>
+
+                  {/* Education Details */}
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-900 mb-2">Education</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <p><span className="font-semibold">Qualification:</span> {selectedApplication.educationDetails?.highestQualification || '—'}</p>
+                      <p><span className="font-semibold">Institution:</span> {selectedApplication.educationDetails?.institutionName || '—'}</p>
+                      <p><span className="font-semibold">Graduation Year:</span> {selectedApplication.educationDetails?.yearOfGraduation || '—'}</p>
+                      <p><span className="font-semibold">CGPA/Percentage:</span> {selectedApplication.educationDetails?.cgpaPercentage || '—'}</p>
+                    </div>
+                  </div>
+
+                  {/* Work Experience */}
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-gray-900 mb-2">Work Experience</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <p><span className="font-semibold">Total Years:</span> {selectedApplication.workExperience?.totalYearsExperience ?? '—'}</p>
+                      <p><span className="font-semibold">Company:</span> {selectedApplication.workExperience?.currentLastCompany || '—'}</p>
+                      <p><span className="font-semibold">Designation:</span> {selectedApplication.workExperience?.currentLastDesignation || '—'}</p>
+                    </div>
+                    {selectedApplication.workExperience?.relevantExperienceDescription && (
+                      <p className="mt-2"><span className="font-semibold">Description:</span> {selectedApplication.workExperience.relevantExperienceDescription}</p>
+                    )}
+                  </div>
+
+                  {/* Skills */}
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-gray-900 mb-2">Skills</h4>
+                    <p><span className="font-semibold">Technical:</span> {Array.isArray(selectedApplication.skills?.technicalSkills) && selectedApplication.skills.technicalSkills.length > 0 ? selectedApplication.skills.technicalSkills.join(', ') : '—'}</p>
+                    <p className="mt-1"><span className="font-semibold">Soft:</span> {Array.isArray(selectedApplication.skills?.softSkills) && selectedApplication.skills.softSkills.length > 0 ? selectedApplication.skills.softSkills.join(', ') : '—'}</p>
+                  </div>
+
+                  {/* Projects */}
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-gray-900 mb-2">Projects</h4>
+                    {Array.isArray(selectedApplication.projects) && selectedApplication.projects.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedApplication.projects.map((proj, i) => (
+                          <div key={i} className="border border-gray-200 rounded-lg p-3">
+                            <p><span className="font-semibold">Name:</span> {proj.projectName || '—'}</p>
+                            <p><span className="font-semibold">Role:</span> {proj.role || '—'}</p>
+                            <p><span className="font-semibold">Duration:</span> {proj.duration || '—'}</p>
+                            <p><span className="font-semibold">Technologies:</span> {Array.isArray(proj.technologiesUsed) && proj.technologiesUsed.length > 0 ? proj.technologiesUsed.join(', ') : '—'}</p>
+                            {proj.description && <p><span className="font-semibold">Description:</span> {proj.description}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>—</p>
+                    )}
+                  </div>
+
+                  {/* Additional Info */}
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-gray-900 mb-2">Additional Info</h4>
+                    <p><span className="font-semibold">Why Join:</span> {selectedApplication.additionalInfo?.whyJoinInternship || '—'}</p>
+                    {selectedApplication.additionalInfo?.achievementsCertifications && (
+                      <p className="mt-1"><span className="font-semibold">Achievements/Certifications:</span> {selectedApplication.additionalInfo.achievementsCertifications}</p>
+                    )}
+                    {selectedApplication.additionalInfo?.portfolioUrl && (
+                      <p className="mt-1"><span className="font-semibold">Portfolio:</span> <a href={selectedApplication.additionalInfo.portfolioUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{selectedApplication.additionalInfo.portfolioUrl}</a></p>
+                    )}
+                  </div>
+
+                  {/* Declarations */}
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-gray-900 mb-2">Declarations</h4>
+                    <p><span className="font-semibold">Information Truthful:</span> {selectedApplication.declarations?.informationTruthful ? 'Yes' : 'No'}</p>
+                    <p><span className="font-semibold">Consent To Share:</span> {selectedApplication.declarations?.consentToShare ? 'Yes' : 'No'}</p>
+                  </div>
+
+                  <div className="mt-6 flex justify-between items-center">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      selectedApplication.status === 'hired' ? 'bg-green-100 text-green-800' :
+                      selectedApplication.status === 'shortlisted' ? 'bg-blue-100 text-blue-800' :
+                      selectedApplication.status === 'reviewed' ? 'bg-yellow-100 text-yellow-800' :
+                      selectedApplication.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {selectedApplication.status || 'pending'}
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      <motion.button whileHover={{ scale: 1.05 }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors" onClick={() => { updateApplicationStatus(selectedApplication._id, 'shortlisted'); setShowApplicationModal(false); }}>
+                        <CheckCircle className="w-4 h-4 inline mr-1" /> Shortlist
+                      </motion.button>
+                      <motion.button whileHover={{ scale: 1.05 }} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors" onClick={() => { updateApplicationStatus(selectedApplication._id, 'rejected'); setShowApplicationModal(false); }}>
+                        <X className="w-4 h-4 inline mr-1" /> Reject
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {activeSection === 'dashboard' ? (
           <>

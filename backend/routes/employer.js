@@ -3,6 +3,7 @@ const router = express.Router();
 const InternshipPosting = require('../models/InternshipPosting');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { sendShortlistEmail, sendRejectionEmail } = require('../utils/emailService');
 
 // Test route without auth to check if the issue is with auth middleware
 router.get('/test', (req, res) => {
@@ -652,6 +653,36 @@ router.patch('/applications-detailed/:id/status', protect, async (req, res) => {
       if (appIndex !== -1) {
         internship.applications[appIndex].status = status;
         await internship.save();
+      }
+    }
+
+    // If shortlisted, send a professional email to the jobseeker
+    if (status === 'shortlisted') {
+      try {
+        const jobseeker = await User.findById(application.jobseekerId);
+        const companyName = internship?.companyName || 'Our Company';
+        const internshipTitle = internship?.title || 'Internship';
+        const nextSteps = notes || '';
+        if (jobseeker?.email) {
+          await sendShortlistEmail(jobseeker.email, jobseeker.name || 'Candidate', companyName, internshipTitle, nextSteps);
+        }
+      } catch (emailErr) {
+        console.error('Error sending shortlist email:', emailErr);
+      }
+    }
+
+    // If rejected, send a professional rejection email
+    if (status === 'rejected') {
+      try {
+        const jobseeker = await User.findById(application.jobseekerId);
+        const companyName = internship?.companyName || 'Our Company';
+        const internshipTitle = internship?.title || 'Internship';
+        const reason = notes || '';
+        if (jobseeker?.email) {
+          await sendRejectionEmail(jobseeker.email, jobseeker.name || 'Candidate', companyName, internshipTitle, reason);
+        }
+      } catch (emailErr) {
+        console.error('Error sending rejection email:', emailErr);
       }
     }
 

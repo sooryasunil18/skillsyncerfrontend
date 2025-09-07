@@ -246,6 +246,8 @@ const JobseekerDashboard = () => {
   // Load internship applications
   const [applications, setApplications] = useState([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [showApplicationDetails, setShowApplicationDetails] = useState(false);
 
   // Application form state
   const [showApplicationForm, setShowApplicationForm] = useState(false);
@@ -257,7 +259,10 @@ const JobseekerDashboard = () => {
     try {
       const response = await jobseekerApi.getDetailedApplications();
       if (response.success) {
-        setApplications(response.data || []);
+        // The API util wraps responses as { success, data } and backend may also wrap as { success, data }
+        const payload = response?.data?.success ? response.data.data : response.data;
+        const apps = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
+        setApplications(apps);
       } else {
         console.error('Failed to load applications:', response.data?.message || response.message);
         setApplications([]);
@@ -741,23 +746,23 @@ const JobseekerDashboard = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold text-gray-900">
-                            {application.internshipDetails?.title || application.internship?.title || 'Internship'}
+                            {application.internshipDetails?.title || application.internshipId?.title || application.internship?.title || 'Internship'}
                           </h3>
                           <p className="text-blue-600 font-medium mb-2">
-                            {application.internshipDetails?.companyName || application.internship?.companyName || 'Company'}
+                            {application.internshipDetails?.companyName || application.internshipId?.companyName || application.internship?.companyName || 'Company'}
                           </p>
                           <div className="flex items-center space-x-6 text-sm text-gray-600">
                             <span className="flex items-center">
                               <MapPin className="w-4 h-4 mr-1" />
-                              {application.internshipDetails?.location || application.internship?.location || 'Location not specified'}
+                              {application.internshipDetails?.location || application.internshipId?.location || application.internship?.location || 'Location not specified'}
                             </span>
                             <span className="flex items-center">
                               <Clock className="w-4 h-4 mr-1" />
-                              {application.internshipDetails?.duration || application.internship?.duration || 'Duration not specified'}
+                              {application.internshipDetails?.duration || application.internshipId?.duration || application.internship?.duration || 'Duration not specified'}
                             </span>
                             <span className="flex items-center">
                               <Globe className="w-4 h-4 mr-1" />
-                              {application.internshipDetails?.workMode || application.internship?.mode || 'Mode not specified'}
+                              {application.internshipDetails?.workMode || application.internshipId?.mode || application.internship?.mode || 'Mode not specified'}
                             </span>
                             <span className="flex items-center">
                               <Calendar className="w-4 h-4 mr-1" />
@@ -796,7 +801,9 @@ const JobseekerDashboard = () => {
                             {application.status ? application.status.charAt(0).toUpperCase() + application.status.slice(1) : 'Applied'}
                           </span>
                           <motion.button
+                            type="button"
                             whileHover={{ scale: 1.05 }}
+                            onClick={() => { setSelectedApplication(application); setShowApplicationDetails(true); }}
                             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                           >
                             View Details
@@ -1276,8 +1283,150 @@ const JobseekerDashboard = () => {
           </motion.div>
         )}
 
+        {/* Application Details Modal */}
+        <AnimatePresence>
+          {showApplicationDetails && selectedApplication && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              onClick={() => setShowApplicationDetails(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">Application Details</h3>
+                  <button onClick={() => setShowApplicationDetails(false)} className="text-gray-500 hover:text-gray-700">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-sm text-gray-700">
+                  <p>
+                    <span className="font-semibold">Position:</span> {selectedApplication.internshipDetails?.title || selectedApplication.internshipId?.title || 'Internship'}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Company:</span> {selectedApplication.internshipDetails?.companyName || selectedApplication.internshipId?.companyName || 'Company'}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <p className="flex items-center"><MapPin className="w-4 h-4 mr-1" /> {selectedApplication.internshipDetails?.location || selectedApplication.internshipId?.location || '—'}</p>
+                    <p className="flex items-center"><Globe className="w-4 h-4 mr-1" /> {selectedApplication.internshipDetails?.workMode || selectedApplication.internshipId?.mode || '—'}</p>
+                    <p className="flex items-center"><Clock className="w-4 h-4 mr-1" /> {selectedApplication.internshipDetails?.duration || selectedApplication.internshipId?.duration || '—'}</p>
+                    <p className="flex items-center"><Calendar className="w-4 h-4 mr-1" /> Applied {new Date(selectedApplication.appliedAt || selectedApplication.createdAt).toLocaleString()}</p>
+                  </div>
+
+                  {selectedApplication.personalDetails && (
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <p className="font-semibold mb-1">Personal Details</p>
+                      <p><span className="font-semibold">Name:</span> {selectedApplication.personalDetails.fullName}</p>
+                      <p><span className="font-semibold">Email:</span> {selectedApplication.personalDetails.emailAddress}</p>
+                      {selectedApplication.personalDetails.contactNumber && (
+                        <p><span className="font-semibold">Phone:</span> {selectedApplication.personalDetails.contactNumber}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedApplication.additionalInfo?.resumeUrl && (
+                    <div className="mt-4">
+                      <a href={selectedApplication.additionalInfo.resumeUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                        View Submitted Resume
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex justify-end space-x-3">
+                    <button
+                      onClick={() => setShowApplicationDetails(false)}
+                      className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {activeSection === 'dashboard' ? (
           <>
+            {/* Application Details Modal */}
+            <AnimatePresence>
+              {showApplicationDetails && selectedApplication && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                  onClick={() => setShowApplicationDetails(false)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-gray-900">Application Details</h3>
+                      <button onClick={() => setShowApplicationDetails(false)} className="text-gray-500 hover:text-gray-700">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-sm text-gray-700">
+                      <p>
+                        <span className="font-semibold">Position:</span> {selectedApplication.internshipDetails?.title || selectedApplication.internshipId?.title || 'Internship'}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Company:</span> {selectedApplication.internshipDetails?.companyName || selectedApplication.internshipId?.companyName || 'Company'}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <p className="flex items-center"><MapPin className="w-4 h-4 mr-1" /> {selectedApplication.internshipDetails?.location || selectedApplication.internshipId?.location || '—'}</p>
+                        <p className="flex items-center"><Globe className="w-4 h-4 mr-1" /> {selectedApplication.internshipDetails?.workMode || selectedApplication.internshipId?.mode || '—'}</p>
+                        <p className="flex items-center"><Clock className="w-4 h-4 mr-1" /> {selectedApplication.internshipDetails?.duration || selectedApplication.internshipId?.duration || '—'}</p>
+                        <p className="flex items-center"><Calendar className="w-4 h-4 mr-1" /> Applied {new Date(selectedApplication.appliedAt || selectedApplication.createdAt).toLocaleString()}</p>
+                      </div>
+
+                      {selectedApplication.personalDetails && (
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                          <p className="font-semibold mb-1">Personal Details</p>
+                          <p><span className="font-semibold">Name:</span> {selectedApplication.personalDetails.fullName}</p>
+                          <p><span className="font-semibold">Email:</span> {selectedApplication.personalDetails.emailAddress}</p>
+                          {selectedApplication.personalDetails.contactNumber && (
+                            <p><span className="font-semibold">Phone:</span> {selectedApplication.personalDetails.contactNumber}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedApplication.additionalInfo?.resumeUrl && (
+                        <div className="mt-4">
+                          <a href={selectedApplication.additionalInfo.resumeUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                            View Submitted Resume
+                          </a>
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex justify-end space-x-3">
+                        <button
+                          onClick={() => setShowApplicationDetails(false)}
+                          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Enhanced Profile Completion Alert */}
             {dashboardData?.profile?.completionPercentage < 100 && (
           <motion.div

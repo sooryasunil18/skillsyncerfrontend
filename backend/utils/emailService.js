@@ -170,9 +170,89 @@ const sendWelcomeEmail = async (userEmail, userName, userRole) => {
   }
 };
 
+// Send shortlist notification email to jobseeker
+const sendShortlistEmail = async (toEmail, toName, companyName, internshipTitle, nextSteps = '') => {
+  try {
+    const transporter = createTransporter();
+
+    const subject = `You’ve been shortlisted for ${internshipTitle} at ${companyName}`;
+    const messageHtml = `
+      <p>Dear ${toName},</p>
+      <p>We’re pleased to inform you that you have been <strong>shortlisted</strong> for the <strong>${internshipTitle}</strong> opportunity at <strong>${companyName}</strong>.</p>
+      ${nextSteps ? `<p><strong>Next steps:</strong> ${nextSteps}</p>` : ''}
+      <p>Our team will reach out with further details soon. In the meantime, you can view your application status from your dashboard:</p>
+      <p><a href="${process.env.FRONTEND_URL}/dashboard" target="_blank" rel="noopener">Go to your dashboard</a></p>
+      <p>Congratulations and best of luck for the next round!</p>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: toEmail,
+      subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333; text-align: center;">Shortlist Notification</h2>
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            ${messageHtml}
+          </div>
+          <p>Best regards,<br/>${companyName} & SkillSyncer Team</p>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Shortlist email sent:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Error sending shortlist email:', error);
+    return false;
+  }
+};
+
+// Send rejection notification email to jobseeker
+const sendRejectionEmail = async (toEmail, toName, companyName, internshipTitle, reason = '') => {
+  try {
+    const transporter = createTransporter();
+
+    const subject = `Update on your application for ${internshipTitle} at ${companyName}`;
+    const messageHtml = `
+      <p>Dear ${toName},</p>
+      <p>Thank you for your interest in the <strong>${internshipTitle}</strong> opportunity at <strong>${companyName}</strong>. After careful consideration, we will not be moving forward with your application at this time.</p>
+      ${reason ? `<p><strong>Note:</strong> ${reason}</p>` : ''}
+      <p>We sincerely appreciate the time you invested in applying. We encourage you to explore other opportunities on SkillSyncer that may align with your profile.</p>
+      <p><a href="${process.env.FRONTEND_URL}/internships" target="_blank" rel="noopener">Browse internships</a></p>
+      <p>We wish you the best in your search and future endeavors.</p>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: toEmail,
+      subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333; text-align: center;">Application Update</h2>
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            ${messageHtml}
+          </div>
+          <p>Best regards,<br/>${companyName} & SkillSyncer Team</p>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Rejection email sent:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Error sending rejection email:', error);
+    return false;
+  }
+};
+
 module.exports = {
   sendMentorCredentials,
   sendNotificationEmail,
   sendWelcomeEmail,
-  createTransporter
+  createTransporter,
+  sendShortlistEmail,
+  sendRejectionEmail
 };

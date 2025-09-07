@@ -1,10 +1,11 @@
 // Robust API utility with error handling and retry logic
 
-const API_BASE_URL = 'http://localhost:5003';
+// Use shared API base config with Vite env override
+import { API_BASE_URL as CONFIG_API_BASE_URL } from '../config/api';
 
-// Simplified API URL getter - use the correct port directly
+// Simplified API URL getter - honor env/config
 const getApiUrl = () => {
-  return API_BASE_URL;
+  return CONFIG_API_BASE_URL;
 };
 
 // Enhanced fetch function with retry logic

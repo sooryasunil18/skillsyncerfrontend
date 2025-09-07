@@ -166,11 +166,19 @@ router.get('/profile', async (req, res) => {
       });
     }
 
+    // Fetch extended JobseekerProfile to expose resumeUrl and other fields
+    const extendedProfile = await JobseekerProfile.findOne({ userId: req.user._id });
+
+    // Normalize resume URL for frontend convenience
+    const normalizedResumeUrl = extendedProfile?.resumeUrl || user.profile?.resume || null;
+
     res.json({
       success: true,
       data: {
         user,
-        profileCompletion: user.profileCompletion
+        profileCompletion: user.profileCompletion,
+        extendedProfile,
+        resumeUrl: normalizedResumeUrl
       }
     });
 
@@ -1358,12 +1366,21 @@ router.post('/internships/:id/apply-detailed', async (req, res) => {
       });
     }
 
+    // Normalize eligibility to model enum
+    const allowedEligibility = ['Freshers Only', 'Experienced Only', 'Both'];
+    const normalizedEligibility = allowedEligibility.includes(applicationData?.internshipDetails?.eligibility)
+      ? applicationData.internshipDetails.eligibility
+      : 'Both';
+
     // Create detailed application
     const application = new InternshipApplication({
       internshipId: req.params.id,
       jobseekerId: req.user._id,
       employerId: internship.employerId,
-      internshipDetails: applicationData.internshipDetails,
+      internshipDetails: {
+        ...applicationData.internshipDetails,
+        eligibility: normalizedEligibility
+      },
       personalDetails: applicationData.personalDetails,
       educationDetails: applicationData.educationDetails,
       workExperience: applicationData.workExperience,
@@ -1400,6 +1417,14 @@ router.post('/internships/:id/apply-detailed', async (req, res) => {
 
   } catch (error) {
     console.error('Error submitting detailed application:', error);
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors || {}).map(e => e.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed while submitting application',
+        errors
+      });
+    }
     res.status(500).json({
       success: false,
       message: 'Server error while submitting application'
