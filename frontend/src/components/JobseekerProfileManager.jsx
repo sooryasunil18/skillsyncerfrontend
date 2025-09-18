@@ -1337,13 +1337,15 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                 </div>
               </div>
 
-              {/* Save Button */}
+              {/* Actions: View and Save on the same row */}
               <div className="flex justify-end space-x-4">
                 <button
                   onClick={() => setActiveSection('view')}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="h-10 w-10 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center"
+                  aria-label="View"
+                  title="View"
                 >
-                  Cancel
+                  <Eye className="h-5 w-5" />
                 </button>
                 <button
                   onClick={handleSaveProfile}

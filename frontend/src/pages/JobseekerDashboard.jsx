@@ -249,6 +249,34 @@ const JobseekerDashboard = () => {
     setSelectedInternship(null);
   };
 
+  // Open internship details modal and fetch full details
+  const handleViewInternship = async (internshipId) => {
+    try {
+      setDetailsLoading(true);
+      setShowInternshipDetails(true);
+      setSelectedInternshipDetails(null);
+      const res = await jobseekerApi.getInternshipDetails(internshipId);
+      if (res.success) {
+        const data = res?.data?.data || res?.data;
+        setSelectedInternshipDetails(data);
+      } else {
+        alert(res?.data?.message || 'Failed to load internship details');
+        setShowInternshipDetails(false);
+      }
+    } catch (e) {
+      console.error('Failed to load internship details', e);
+      alert('Failed to load internship details. Please try again.');
+      setShowInternshipDetails(false);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleCloseInternshipDetails = () => {
+    setShowInternshipDetails(false);
+    setSelectedInternshipDetails(null);
+  };
+
   // Load internship applications
   const [applications, setApplications] = useState([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
@@ -259,6 +287,11 @@ const JobseekerDashboard = () => {
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [selectedInternship, setSelectedInternship] = useState(null);
   const [applicationFormData, setApplicationFormData] = useState(null);
+
+  // Internship details modal state
+  const [showInternshipDetails, setShowInternshipDetails] = useState(false);
+  const [selectedInternshipDetails, setSelectedInternshipDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   // Helper to check if user already applied to an internship
   const hasAppliedTo = React.useCallback((internshipId) => {
@@ -655,6 +688,18 @@ const JobseekerDashboard = () => {
                               {internship.industry}
                             </span>
                           </div>
+                          <div className="flex items-center space-x-4 mt-2 text-sm">
+                            <span className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-1" />
+                              Last date: {internship.lastDateToApply ? new Date(internship.lastDateToApply).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                            </span>
+                            {typeof internship.daysLeftToApply === 'number' && (
+                              <span className={`flex items-center ${internship.daysLeftToApply <= 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                                <Clock className="w-4 h-4 mr-1" />
+                                {internship.daysLeftToApply <= 0 ? 'Applications closed' : `${internship.daysLeftToApply} days left`}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex flex-wrap gap-2 mt-3">
                             {internship.skillsRequired && internship.skillsRequired.map((skill, skillIndex) => (
                               <span
@@ -667,6 +712,16 @@ const JobseekerDashboard = () => {
                           </div>
                         </div>
                         <div className="flex flex-col space-y-2 ml-4">
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleViewInternship(internship._id)}
+                            className="p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            title="View details"
+                            aria-label="View details"
+                          >
+                            <Eye className="w-5 h-5" />
+                          </motion.button>
                           <motion.button
                             whileHover={{ scale: hasAppliedTo(internship._id) ? 1 : 1.02 }}
                             whileTap={{ scale: hasAppliedTo(internship._id) ? 1 : 0.98 }}
@@ -1957,6 +2012,81 @@ const JobseekerDashboard = () => {
           onClose={() => setShowProfileManager(false)}
           initialData={dashboardData?.profile || {}}
         />
+      )}
+
+      {/* Internship Details Modal */}
+      {showInternshipDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-6 relative max-h-[85vh] flex flex-col">
+            <button
+              onClick={handleCloseInternshipDetails}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {detailsLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading internship details...</p>
+              </div>
+            ) : selectedInternshipDetails ? (
+              <div className="overflow-y-auto pr-2 custom-scrollbar">
+                <h3 className="text-2xl font-bold text-gray-900">{selectedInternshipDetails.title}</h3>
+                <p className="text-blue-600 font-medium">{selectedInternshipDetails.companyName}</p>
+                <div className="flex items-center space-x-4 mt-3 text-sm text-gray-600">
+                  <span className="flex items-center"><MapPin className="w-4 h-4 mr-1" />{selectedInternshipDetails.location}</span>
+                  <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1" />{selectedInternshipDetails.mode}</span>
+                  <span className="flex items-center"><Clock className="w-4 h-4 mr-1" />{selectedInternshipDetails.duration}</span>
+                  <span className="flex items-center"><Calendar className="w-4 h-4 mr-1" />Last date: {selectedInternshipDetails.lastDateToApply ? new Date(selectedInternshipDetails.lastDateToApply).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</span>
+                </div>
+                <div className="mt-4">
+                  <h4 className="text-lg font-semibold text-gray-900">Description</h4>
+                  <p className="text-gray-700 mt-2 whitespace-pre-line">{selectedInternshipDetails.description}</p>
+                </div>
+                {Array.isArray(selectedInternshipDetails.skillsRequired) && selectedInternshipDetails.skillsRequired.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Skills Required</h4>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedInternshipDetails.skillsRequired.map((skill, idx) => (
+                        <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {selectedInternshipDetails.eligibility && (
+                  <div className="mt-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Eligibility</h4>
+                    <p className="text-gray-700 mt-2 whitespace-pre-line">{selectedInternshipDetails.eligibility}</p>
+                  </div>
+                )}
+                {selectedInternshipDetails.benefits && (
+                  <div className="mt-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Benefits</h4>
+                    <p className="text-gray-700 mt-2 whitespace-pre-line">{selectedInternshipDetails.benefits}</p>
+                  </div>
+                )}
+                <div className="mt-6 flex justify-end space-x-3 sticky bottom-0 bg-white pt-4">
+                  <motion.button
+                    whileHover={{ scale: hasAppliedTo(selectedInternshipDetails._id) ? 1 : 1.02 }}
+                    whileTap={{ scale: hasAppliedTo(selectedInternshipDetails._id) ? 1 : 0.98 }}
+                    onClick={() => {
+                      if (!hasAppliedTo(selectedInternshipDetails._id)) {
+                        handleApplyDetailed(selectedInternshipDetails);
+                      }
+                    }}
+                    disabled={hasAppliedTo(selectedInternshipDetails._id)}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${hasAppliedTo(selectedInternshipDetails._id) ? 'bg-red-100 text-red-700 border border-red-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                  >
+                    {hasAppliedTo(selectedInternshipDetails._id) ? 'Applied' : 'Apply Now'}
+                  </motion.button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-gray-600">Failed to load details.</div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Internship Application Form Modal */}

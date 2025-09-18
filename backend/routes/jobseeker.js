@@ -1036,6 +1036,11 @@ router.get('/internships', async (req, res) => {
     // Build filter object
     const filters = { status: 'active' };
     
+    // Only include internships whose last application date is today or later
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    filters.lastDateToApply = { $gte: startOfToday };
+    
     if (search) {
       filters.$or = [
         { title: { $regex: search, $options: 'i' } },
