@@ -6,6 +6,17 @@ const dotenv = require('dotenv');
 // Load environment variables first
 dotenv.config();
 
+// Prefer IPv4 to avoid IPv6 connectivity issues with MongoDB SRV
+try {
+  const dns = require('dns');
+  if (dns && typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+    console.log('🌐 DNS resolution order set to ipv4first');
+  }
+} catch (e) {
+  console.log('🌐 DNS default order not set:', e.message);
+}
+
 console.log('🔄 Starting SkillSyncer Server...');
 
 const app = express();
@@ -52,8 +63,11 @@ const connectDB = async () => {
     console.log('URI:', process.env.MONGODB_URI?.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'));
     
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      // Modern driver options (remove deprecated flags)
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
+      family: 4, // force IPv4 for connections
+      // tls/ssl is automatically used for SRV URIs on Atlas; no need to set explicitly
     });
 
     console.log('✅ MongoDB Connected Successfully!');

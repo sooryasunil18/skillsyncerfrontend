@@ -127,10 +127,10 @@ router.get('/dashboard', async (req, res) => {
       },
       quickActions: quickActions.slice(0, 4), // Show top 4 quick actions
       stats: {
-        profileViews: 0, // Implement later
-        applicationsSubmitted: 0, // Implement later
-        interviewsScheduled: 0, // Implement later
-        jobsSaved: 0, // Implement later
+        profileViews: 0,
+        applicationsSubmitted: await InternshipApplication.countDocuments({ jobseekerId: user._id }),
+        interviewsScheduled: 0,
+        jobsSaved: 0,
         profileCompletion: user.profileCompletion
       },
       recentActivity: [], // Implement later

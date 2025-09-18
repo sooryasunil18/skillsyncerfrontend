@@ -10,8 +10,6 @@ Full‑stack platform connecting Students, Employers, Mentors, and Admins with r
 - **Quick Start**
 - **Project Structure**
 - **Configuration**
-- **Seeding & Sample Data**
-- **Roles & Dashboards**
 - **Authentication**
 - **Key API Endpoints**
 - **ATS & Resume Parsing**
@@ -160,47 +158,6 @@ EMBEDDING_ENDPOINT=http://localhost:8000/embed
 
 Frontend Firebase: update `frontend/src/config/firebase.js` using the guide in `FIREBASE_SETUP.md`.
 
-## 🌱 Seeding & Sample Data
-
-Run from project root unless noted.
-
-```bash
-# Create an initial admin user (interactive or uses env)
-node backend/seed-admin.js
-
-# Create a test employer account
-node backend/seed-test-employer.js
-
-# Initialize database collections and indexes
-node backend/scripts/initializeDatabase.js
-
-# Create sample internships (employer must exist)
-node backend/scripts/createSampleInternships.js
-
-# Create admin via script (alternative flow)
-node backend/scripts/createAdmin.js
-
-# Verify admin can log in (diagnostic)
-node backend/scripts/verifyAdmin.js
-
-# Test admin login with supplied creds (diagnostic)
-node backend/scripts/testAdminLogin.js
-```
-
-Notes:
-
-- Ensure `MONGODB_URI` is reachable before running seeding scripts.
-- Admin credentials will be printed in the console when created by seeders; update after first login.
-
-## 👥 Roles & Dashboards
-
-- **Jobseeker**: Build profile, upload resume, view ATS scores and suggestions, manage visibility.
-- **Employer/Company**: Post and manage internships, track applications from the Employer Dashboard.
-- **Mentor**: Mentor dashboard placeholder present; extend for mentorship workflows.
-- **Admin**: Administrative endpoints and scripts for verification and oversight.
-
-Frontend pages include `JobseekerDashboard`, `EmployerDashboard`, `AdminDashboard`, and `MentorDashboard`. The Employer dashboard integrates the full Internship Posting system (create, update, close, delete) with dynamic forms and validation.
-
 ## 🔐 Authentication
 
 - Bearer JWT via `Authorization: Bearer <token>`
@@ -253,13 +210,6 @@ node test-google-auth.js
 node test-profile-api.js
 node test-profile-update.js
 node test-registration-validation.js
-```
-
-Backend script utilities (diagnostics):
-
-```bash
-node backend/scripts/testAdminLogin.js
-node backend/scripts/verifyAdmin.js
 ```
 
 Manual checklist:

@@ -101,23 +101,7 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
       'Marketing Specialist',
       'HR Coordinator'
     ],
-    'Healthcare': [
-      'Clinical Research Associate',
-      'Medical Device Engineer',
-      'Healthcare IT Specialist',
-      'Pharmaceutical Analyst',
-      'Public Health Coordinator',
-      'Healthcare Administrator',
-      'Nursing Assistant',
-      'Medical Laboratory Technician',
-      'Health Informatics Specialist',
-      'Biotechnology Researcher',
-      'Patient Care Coordinator',
-      'Medical Writer',
-      'Healthcare Data Analyst',
-      'Quality Assurance Specialist',
-      'Regulatory Affairs Specialist'
-    ],
+    
     'Education': [
       'Teaching Assistant',
       'Curriculum Developer',
@@ -135,175 +119,10 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
       'Admissions Counselor',
       'Career Services Coordinator'
     ],
-    'Retail': [
-      'Retail Sales Associate',
-      'Store Manager Trainee',
-      'Inventory Management Specialist',
-      'Customer Service Representative',
-      'Visual Merchandiser',
-      'E-commerce Specialist',
-      'Marketing Assistant',
-      'Supply Chain Analyst',
-      'Buyer Assistant',
-      'Loss Prevention Officer',
-      'Digital Marketing Intern',
-      'Social Media Coordinator',
-      'Brand Ambassador',
-      'Product Analyst',
-      'Retail Operations Analyst'
-    ],
-    'Manufacturing': [
-      'Production Engineer',
-      'Quality Control Inspector',
-      'Process Engineer',
-      'Maintenance Technician',
-      'Industrial Engineer',
-      'Safety Officer',
-      'Supply Chain Coordinator',
-      'Logistics Analyst',
-      'Operations Analyst',
-      'Mechanical Engineer',
-      'Electrical Engineer',
-      'Chemical Engineer',
-      'Automation Engineer',
-      'Project Coordinator',
-      'Manufacturing Analyst'
-    ],
-    'Consulting': [
-      'Business Analyst',
-      'Strategy Consultant',
-      'Management Consultant',
-      'Data Analyst',
-      'Research Associate',
-      'Project Coordinator',
-      'Financial Analyst',
-      'Operations Consultant',
-      'HR Consultant',
-      'IT Consultant',
-      'Marketing Consultant',
-      'Risk Analyst',
-      'Process Improvement Specialist',
-      'Change Management Specialist',
-      'Performance Analyst'
-    ],
-    'Media': [
-      'Content Writer',
-      'Digital Marketing Specialist',
-      'Social Media Manager',
-      'Video Editor',
-      'Graphic Designer',
-      'Journalist',
-      'Public Relations Assistant',
-      'Event Coordinator',
-      'Photographer',
-      'Videographer',
-      'SEO Specialist',
-      'Copywriter',
-      'Brand Manager',
-      'Media Planner',
-      'Creative Assistant'
-    ],
-    'Real Estate': [
-      'Property Manager',
-      'Real Estate Agent',
-      'Leasing Consultant',
-      'Property Analyst',
-      'Facilities Manager',
-      'Construction Coordinator',
-      'Project Manager',
-      'Marketing Assistant',
-      'Customer Service Representative',
-      'Administrative Assistant',
-      'Investment Analyst',
-      'Valuation Specialist',
-      'Legal Assistant',
-      'Sales Coordinator',
-      'Property Developer'
-    ],
-    'Automotive': [
-      'Automotive Engineer',
-      'Mechanical Engineer',
-      'Electrical Engineer',
-      'Design Engineer',
-      'Quality Engineer',
-      'Production Engineer',
-      'Service Technician',
-      'Parts Specialist',
-      'Sales Representative',
-      'Marketing Assistant',
-      'Research & Development Engineer',
-      'Testing Engineer',
-      'Manufacturing Engineer',
-      'Safety Engineer',
-      'Automotive Analyst'
-    ],
-    'Food & Beverage': [
-      'Kitchen Assistant',
-      'Food Service Manager',
-      'Quality Control Specialist',
-      'Food Safety Officer',
-      'Nutritionist',
-      'Menu Developer',
-      'Catering Coordinator',
-      'Restaurant Manager',
-      'Food Technologist',
-      'Beverage Specialist',
-      'Supply Chain Coordinator',
-      'Marketing Assistant',
-      'Customer Service Representative',
-      'Operations Analyst',
-      'Food Production Assistant'
-    ],
-    'Non-Profit': [
-      'Program Coordinator',
-      'Fundraising Assistant',
-      'Volunteer Coordinator',
-      'Grant Writer',
-      'Communications Assistant',
-      'Event Coordinator',
-      'Social Worker',
-      'Community Outreach Specialist',
-      'Administrative Assistant',
-      'Research Assistant',
-      'Marketing Assistant',
-      'Data Analyst',
-      'Project Manager',
-      'Advocacy Specialist',
-      'Development Assistant'
-    ],
-    'Government': [
-      'Administrative Assistant',
-      'Policy Analyst',
-      'Research Assistant',
-      'Data Analyst',
-      'Communications Officer',
-      'Project Coordinator',
-      'Legal Assistant',
-      'Human Resources Assistant',
-      'Financial Analyst',
-      'IT Support Specialist',
-      'Public Relations Assistant',
-      'Event Coordinator',
-      'Compliance Officer',
-      'Records Manager',
-      'Program Assistant'
-    ],
+   
     'Other': [
       'General Assistant',
-      'Administrative Coordinator',
-      'Project Assistant',
-      'Data Entry Specialist',
-      'Customer Service Representative',
-      'Marketing Assistant',
-      'Research Assistant',
-      'Operations Assistant',
-      'Sales Assistant',
-      'HR Assistant',
-      'IT Support Assistant',
-      'Content Creator',
-      'Event Coordinator',
-      'Business Analyst',
-      'Quality Assurance Assistant'
+       'HR Assistant',
     ]
   };
 
@@ -430,14 +249,20 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
   const validateForm = () => {
     const newErrors = {};
 
+    // Required text/select fields
     if (!formData.title) newErrors.title = 'Internship title is required';
+    if (!formData.industry) newErrors.industry = 'Industry is required';
     if (!formData.location) newErrors.location = 'Location is required';
+    if (!formData.mode) newErrors.mode = 'Mode is required';
+    if (!['Online', 'Offline', 'Hybrid'].includes(formData.mode)) newErrors.mode = 'Mode must be Online, Offline, or Hybrid';
     if (!formData.startDate) newErrors.startDate = 'Start date is required';
     if (!formData.lastDateToApply) newErrors.lastDateToApply = 'Last date to apply is required';
+    if (!formData.duration) newErrors.duration = 'Duration is required';
     if (!formData.description) newErrors.description = 'Description is required';
     if (formData.skillsRequired.length === 0) newErrors.skillsRequired = 'At least one skill is required';
     if (!formData.eligibility) newErrors.eligibility = 'Eligibility criteria is required';
     if (formData.totalSeats < 1) newErrors.totalSeats = 'At least 1 seat must be available';
+    if (formData.totalSeats > 60) newErrors.totalSeats = 'Cannot exceed 60 seats';
 
     // Date validation
     if (formData.startDate && formData.lastDateToApply) {
@@ -587,7 +412,7 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
       </div>
 
              {/* Debug Info */}
-       {debugInfo && (
+       {/* {debugInfo && (
          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
            <p className="text-sm text-yellow-800">
              <strong>Debug Info:</strong> {debugInfo}
@@ -598,7 +423,7 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
              Locations: {Array.isArray(indiaLocations) ? `${indiaLocations.length} items` : 'Not array'}
            </p>
          </div>
-       )}
+       )} */}
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Basic Information */}
@@ -610,21 +435,13 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
             <select
               value={formData.industry}
               onChange={(e) => handleInputChange('industry', e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              className={`w-full rounded-xl border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
+                errors.industry ? 'border-red-500' : 'border-gray-300'
+              }`}
             >
               <option value="IT/Technology">IT/Technology</option>
               <option value="Banking">Banking</option>
-              <option value="Healthcare">Healthcare</option>
               <option value="Education">Education</option>
-              <option value="Retail">Retail</option>
-              <option value="Manufacturing">Manufacturing</option>
-              <option value="Consulting">Consulting</option>
-              <option value="Media">Media</option>
-              <option value="Real Estate">Real Estate</option>
-              <option value="Automotive">Automotive</option>
-              <option value="Food & Beverage">Food & Beverage</option>
-              <option value="Non-Profit">Non-Profit</option>
-              <option value="Government">Government</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -707,13 +524,20 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
             <select
               value={formData.mode}
               onChange={(e) => handleInputChange('mode', e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              className={`w-full rounded-xl border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
+                errors.mode ? 'border-red-500' : 'border-gray-300'
+              }`}
             >
               <option value="Online">Online</option>
               <option value="Offline">Offline</option>
-              <option value="Remote">Remote</option>
               <option value="Hybrid">Hybrid</option>
             </select>
+            {errors.mode && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.mode}
+              </p>
+            )}
           </div>
         </div>
 
@@ -766,7 +590,9 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
             <select
               value={formData.duration}
               onChange={(e) => handleInputChange('duration', e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              className={`w-full rounded-xl border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
+                errors.duration ? 'border-red-500' : 'border-gray-300'
+              }`}
             >
               <option value="15 days">15 days</option>
               <option value="1 month">1 month</option>
@@ -776,6 +602,12 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
               <option value="Full day">Full day</option>
               <option value="Half day">Half day</option>
             </select>
+            {errors.duration && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.duration}
+              </p>
+            )}
           </div>
         </div>
 
@@ -787,13 +619,13 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
           <input
             type="number"
             min="1"
-            max="1000"
+            max="60"
             value={formData.totalSeats}
             onChange={(e) => handleInputChange('totalSeats', parseInt(e.target.value))}
             className={`w-full rounded-xl border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
               errors.totalSeats ? 'border-red-500' : 'border-gray-300'
             }`}
-            placeholder="Enter number of seats"
+            placeholder="Enter number of seats (max 60)"
           />
           {errors.totalSeats && (
             <p className="text-red-500 text-sm mt-1 flex items-center">
@@ -997,8 +829,6 @@ const InternshipPostingForm = ({ onSuccess, onCancel, editData = null }) => {
               className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
             >
               <option value="INR">INR (₹)</option>
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
             </select>
           </div>
         </div>

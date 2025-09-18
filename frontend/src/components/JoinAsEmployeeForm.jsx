@@ -41,9 +41,16 @@ const JoinAsEmployeeForm = ({ isOpen, onClose }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // Do not trim/collapse fullName while typing to avoid spacing/caret issues
+    let normalizedValue = value;
+    if (name === 'email') {
+      // Trim and lowercase for consistency
+      normalizedValue = value.trim().toLowerCase();
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: normalizedValue
     }));
     // Clear error when user starts typing
     if (errors[name]) {
@@ -100,14 +107,22 @@ const JoinAsEmployeeForm = ({ isOpen, onClose }) => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.fullName.trim()) {
+    // Name: letters, spaces, dots, hyphens, apostrophes. 2-60 chars. No leading/trailing separators.
+    const name = formData.fullName.trim();
+    const nameRegex = /^(?=.{2,60}$)[A-Za-z][A-Za-z .'-]*[A-Za-z]$/;
+    if (!name) {
       newErrors.fullName = 'Full name is required';
+    } else if (!nameRegex.test(name)) {
+      newErrors.fullName = 'Enter a valid name (letters, spaces, . - \', 2-60 characters)';
     }
 
-    if (!formData.email.trim()) {
+    // Email: robust RFC 5322-ish simple validation.
+    const email = formData.email.trim();
+    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    if (!email) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+    } else if (!emailRegex.test(email)) {
+      newErrors.email = 'Enter a valid email address (e.g., name@example.com)';
     }
 
     if (!formData.companyId) {
@@ -230,10 +245,28 @@ const JoinAsEmployeeForm = ({ isOpen, onClose }) => {
                 name="fullName"
                 value={formData.fullName}
                 onChange={handleInputChange}
+                onBlur={(e) => {
+                  const collapsed = e.target.value.replace(/\s+/g, ' ').trim();
+                  setFormData(prev => ({ ...prev, fullName: collapsed }));
+                  // Re-validate name on blur for immediate feedback
+                  const nameRegex = /^(?=.{2,60}$)[A-Za-z][A-Za-z .'-]*[A-Za-z]$/;
+                  if (!collapsed) {
+                    setErrors(prev => ({ ...prev, fullName: 'Full name is required' }));
+                  } else if (!nameRegex.test(collapsed)) {
+                    setErrors(prev => ({ ...prev, fullName: 'Enter a valid name (letters, spaces, . - \' , 2-60 characters)' }));
+                  } else if (errors.fullName) {
+                    setErrors(prev => ({ ...prev, fullName: '' }));
+                  }
+                }}
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors ${
                   errors.fullName ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter your full name"
+                minLength={2}
+                maxLength={60}
+                pattern="[A-Za-z][A-Za-z .'-]*[A-Za-z]"
+                title="Name should be 2-60 characters and can include letters, spaces, dots, hyphens, and apostrophes."
+                required
               />
               {errors.fullName && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">
@@ -258,6 +291,12 @@ const JoinAsEmployeeForm = ({ isOpen, onClose }) => {
                   errors.email ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter your email address"
+                inputMode="email"
+                autoComplete="email"
+                spellCheck={false}
+                pattern="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+                title="Please enter a valid email (e.g., name@example.com)"
+                required
               />
               {errors.email && (
                 <p className="text-red-500 text-sm mt-1 flex items-center">

@@ -1479,13 +1479,15 @@ const AdminDashboard = () => {
                                 >
                                   {user.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                                 </motion.button>
-                                <motion.button 
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-all duration-200"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </motion.button>
+                                {user.role !== 'admin' && (
+                                  <motion.button 
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-all duration-200"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </motion.button>
+                                )}
                               </div>
                             </td>
                           </motion.tr>

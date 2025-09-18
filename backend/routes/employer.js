@@ -522,19 +522,32 @@ router.get('/india-locations', protect, async (req, res) => {
 // @access  Private (Employer only)
 router.get('/applications-detailed', protect, async (req, res) => {
   try {
-    if (req.user.role !== 'employer' && req.user.role !== 'company') {
+    if (req.user.role !== 'employer' && req.user.role !== 'company' && req.user.role !== 'employee') {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only employers can access this resource.'
+        message: 'Access denied. Only employers or employees can access this resource.'
       });
     }
 
     const InternshipApplication = require('../models/InternshipApplication');
     
     const { status, internshipId, page = 1, limit = 10 } = req.query;
+
+    // Determine the effective employer/company id for fetching applications
+    let effectiveEmployerId = req.user._id;
+    if (req.user.role === 'employee') {
+      const companyId = req.user.employeeProfile?.companyId;
+      if (!companyId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee is not associated with a company.'
+        });
+      }
+      effectiveEmployerId = companyId;
+    }
     
     const applications = await InternshipApplication.getApplicationsForEmployer(
-      req.user._id, 
+      effectiveEmployerId,
       { status, internshipId }
     );
 
@@ -570,18 +583,31 @@ router.get('/applications-detailed', protect, async (req, res) => {
 // @access  Private (Employer only)
 router.get('/applications-detailed/:id', protect, async (req, res) => {
   try {
-    if (req.user.role !== 'employer' && req.user.role !== 'company') {
+    if (req.user.role !== 'employer' && req.user.role !== 'company' && req.user.role !== 'employee') {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only employers can access this resource.'
+        message: 'Access denied. Only employers or employees can access this resource.'
       });
     }
 
     const InternshipApplication = require('../models/InternshipApplication');
+
+    // Determine the effective employer/company id for fetching application
+    let effectiveEmployerId = req.user._id;
+    if (req.user.role === 'employee') {
+      const companyId = req.user.employeeProfile?.companyId;
+      if (!companyId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee is not associated with a company.'
+        });
+      }
+      effectiveEmployerId = companyId;
+    }
     
     const application = await InternshipApplication.findOne({
       _id: req.params.id,
-      employerId: req.user._id
+      employerId: effectiveEmployerId
     })
     .populate('jobseekerId', 'name email profile.profilePicture createdAt')
     .populate('internshipId', 'title companyName startDate duration location mode');

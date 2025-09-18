@@ -135,9 +135,9 @@ const JobseekerDashboard = () => {
   ];
 
   const remoteOptions = [
-    'Remote',
-    'Hybrid work',
-    'In-person'
+    'Online',
+    'Hybrid',
+    'Offline'
   ];
 
   // Removed legacy in-dashboard profile editing logic
@@ -159,6 +159,11 @@ const JobseekerDashboard = () => {
       loadInternships();
     }
   }, [activeSection, internshipFilters]);
+
+  // Prefetch internships to populate KPI on dashboard
+  useEffect(() => {
+    loadInternships();
+  }, []);
 
   const loadInternships = async () => {
     setLoadingInternships(true);
@@ -213,8 +218,9 @@ const JobseekerDashboard = () => {
       const response = await jobseekerApi.applyForInternship(internshipId);
       if (response.success && response.data.success) {
         alert('Application submitted successfully!');
-        // Reload internships to update application status
+        // Reload to reflect new application status in UI
         loadInternships();
+        loadApplications();
       } else {
         alert(response.data?.message || response.message || 'Failed to submit application');
       }
@@ -254,6 +260,15 @@ const JobseekerDashboard = () => {
   const [selectedInternship, setSelectedInternship] = useState(null);
   const [applicationFormData, setApplicationFormData] = useState(null);
 
+  // Helper to check if user already applied to an internship
+  const hasAppliedTo = React.useCallback((internshipId) => {
+    return applications?.some(app => {
+      const id1 = app?.internshipId?._id || app?.internshipId;
+      const id2 = app?.internship?._id;
+      return id1 === internshipId || id2 === internshipId;
+    });
+  }, [applications]);
+
   const loadApplications = async () => {
     setLoadingApplications(true);
     try {
@@ -278,6 +293,13 @@ const JobseekerDashboard = () => {
   // Load applications when applications section is active
   useEffect(() => {
     if (activeSection === 'applications') {
+      loadApplications();
+    }
+  }, [activeSection]);
+
+  // Also load applications when browsing jobs (to mark already applied internships)
+  useEffect(() => {
+    if (activeSection === 'jobs') {
       loadApplications();
     }
   }, [activeSection]);
@@ -531,9 +553,8 @@ const JobseekerDashboard = () => {
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">All Modes</option>
-                    <option value="Remote">Remote</option>
-                    <option value="Offline">Offline</option>
                     <option value="Online">Online</option>
+                    <option value="Offline">Offline</option>
                     <option value="Hybrid">Hybrid</option>
                   </select>
                 </div>
@@ -647,12 +668,13 @@ const JobseekerDashboard = () => {
                         </div>
                         <div className="flex flex-col space-y-2 ml-4">
                           <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleApplyDetailed(internship)}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                            whileHover={{ scale: hasAppliedTo(internship._id) ? 1 : 1.02 }}
+                            whileTap={{ scale: hasAppliedTo(internship._id) ? 1 : 0.98 }}
+                            onClick={() => !hasAppliedTo(internship._id) && handleApplyDetailed(internship)}
+                            disabled={hasAppliedTo(internship._id)}
+                            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${hasAppliedTo(internship._id) ? 'bg-red-100 text-red-700 border border-red-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                           >
-                            Apply Now
+                            {hasAppliedTo(internship._id) ? 'Applied' : 'Apply Now'}
                           </motion.button>
                           <motion.button
                             whileHover={{ scale: 1.1 }}
@@ -796,7 +818,7 @@ const JobseekerDashboard = () => {
                             application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                             application.status === 'accepted' ? 'bg-green-100 text-green-800' :
                             application.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                            'bg-blue-100 text-blue-800'
+                            'bg-red-100 text-red-800'
                           }`}>
                             {application.status ? application.status.charAt(0).toUpperCase() + application.status.slice(1) : 'Applied'}
                           </span>
@@ -1529,7 +1551,7 @@ const JobseekerDashboard = () => {
                   <div>
                     <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Applications</p>
                     <p className="text-3xl font-bold text-gray-900">
-                      {dashboardData?.stats?.applicationsSubmitted || 12}
+                      {dashboardData?.stats?.applicationsSubmitted ?? 12}
                     </p>
                   </div>
                 </div>
@@ -1557,16 +1579,16 @@ const JobseekerDashboard = () => {
                     <BookmarkIcon className="h-7 w-7 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Saved Jobs</p>
+                    <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Saved Internships</p>
                     <p className="text-3xl font-bold text-gray-900">
-                      {dashboardData?.stats?.jobsSaved || 8}
+                      {dashboardData?.stats?.internshipsSaved || 0}
                     </p>
                   </div>
                 </div>
               </div>
               <div className="flex items-center text-sm text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
                 <Star className="w-4 h-4 mr-2" />
-                <span className="font-medium">Browse more jobs</span>
+                <span className="font-medium">Browse more internships</span>
               </div>
             </div>
           </motion.div>
@@ -1587,16 +1609,16 @@ const JobseekerDashboard = () => {
                     <Calendar className="h-7 w-7 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Interviews</p>
+                    <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Available Internships</p>
                     <p className="text-3xl font-bold text-gray-900">
-                      {dashboardData?.stats?.interviewsScheduled || 3}
+                      {internshipPagination?.totalItems || 0}
                     </p>
                   </div>
                 </div>
               </div>
               <div className="flex items-center text-sm text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
                 <Clock className="w-4 h-4 mr-2" />
-                <span className="font-medium">Next: Tomorrow 2PM</span>
+                <span className="font-medium">Updated from listings</span>
               </div>
             </div>
           </motion.div>

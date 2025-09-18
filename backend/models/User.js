@@ -254,6 +254,14 @@ const userSchema = new mongoose.Schema({
     default: 0,
     min: 0,
     max: 100
+  },
+  // Password reset fields
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpires: {
+    type: Date
   }
 }, {
   timestamps: true

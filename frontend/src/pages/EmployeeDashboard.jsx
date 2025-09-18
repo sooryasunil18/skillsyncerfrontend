@@ -25,7 +25,8 @@ import {
   Rocket,
   Sparkles,
   BadgeCheck,
-  Heart
+  Heart,
+  Eye
 } from 'lucide-react';
 
 // Animation helpers
@@ -34,12 +35,26 @@ const fadeUp = (delay = 0) => ({
   animate: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut', delay } },
 });
 
+import { employerApi } from '../utils/api';
+
 const EmployeeDashboard = () => {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [user, setUser] = useState({ name: '', email: '' });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('overview');
+  
+  // Applications state (read-only view for employee)
+  const [applications, setApplications] = useState([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+  const [applicationFilters, setApplicationFilters] = useState({
+    status: '',
+    internshipId: '',
+    search: ''
+  });
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const init = () => {
@@ -61,6 +76,13 @@ const EmployeeDashboard = () => {
     return () => clearInterval(timer);
   }, [navigate]);
 
+  // Load applications when Applications section is active
+  useEffect(() => {
+    if (activeSection === 'applications') {
+      loadApplications();
+    }
+  }, [activeSection, applicationFilters]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userRole');
@@ -68,6 +90,34 @@ const EmployeeDashboard = () => {
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userId');
     navigate('/auth');
+  };
+
+  // Load applications from employer API (employee allowed by backend)
+  const loadApplications = async () => {
+    setLoadingApplications(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Authentication required. Please log in again.');
+        setLoadingApplications(false);
+        return;
+      }
+      const response = await employerApi.getDetailedApplications(applicationFilters);
+      if (response.success && response.data) {
+        const payload = response.data.success ? response.data.data : response.data;
+        const applicationsArray = Array.isArray(payload?.applications) ? payload.applications : (Array.isArray(payload) ? payload : []);
+        setApplications(applicationsArray);
+      } else {
+        setError(`Failed to load applications: ${response.data?.message || response.message || 'No data received'}`);
+        setApplications([]);
+      }
+    } catch (e) {
+      setError(`Error loading applications: ${e.message || 'Network error'}`);
+      setApplications([]);
+    } finally {
+      setLoadingApplications(false);
+    }
   };
 
   const formatTime = (date) =>
@@ -86,6 +136,7 @@ const EmployeeDashboard = () => {
 
   const menu = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'applications', label: 'Applications', icon: Briefcase },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'company', label: 'Company', icon: Building },
     { id: 'security', label: 'Security', icon: Shield },
@@ -459,6 +510,118 @@ const EmployeeDashboard = () => {
           <TopBar />
           <main className="px-4 sm:px-6 lg:px-8 py-6">
             {activeSection === 'overview' && <Overview />}
+            {activeSection === 'applications' && (
+              <div className="bg-white rounded-2xl shadow-sm border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><Briefcase className="h-5 w-5 text-gray-700" /> Applications</h3>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="border rounded-lg px-2 py-1 text-sm"
+                      value={applicationFilters.status}
+                      onChange={(e) => setApplicationFilters(prev => ({ ...prev, status: e.target.value }))}
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="reviewed">Reviewed</option>
+                      <option value="shortlisted">Shortlisted</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="accepted">Accepted</option>
+                    </select>
+                  </div>
+                </div>
+                {error && (
+                  <div className="mb-3 rounded-lg bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">{error}</div>
+                )}
+                {loadingApplications ? (
+                  <div className="text-sm text-gray-600">Loading applications...</div>
+                ) : applications.length === 0 ? (
+                  <div className="text-sm text-gray-600">No applications found.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-600">
+                          <th className="py-2 pr-4">Candidate</th>
+                          <th className="py-2 pr-4">Email</th>
+                          <th className="py-2 pr-4">Internship</th>
+                          <th className="py-2 pr-4">Status</th>
+                          <th className="py-2 pr-4">Applied</th>
+                          <th className="py-2 pr-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applications.map(app => (
+                          <tr key={app._id} className="border-t">
+                            <td className="py-2 pr-4">{app.jobseekerId?.name || 'N/A'}</td>
+                            <td className="py-2 pr-4">{app.jobseekerId?.email || 'N/A'}</td>
+                            <td className="py-2 pr-4">{app.internshipId?.title || 'N/A'}</td>
+                            <td className="py-2 pr-4">
+                              <span className="px-2 py-0.5 rounded text-xs bg-gray-100 border">{app.status}</span>
+                            </td>
+                            <td className="py-2 pr-4">{new Date(app.appliedAt || app.createdAt).toLocaleDateString()}</td>
+                            <td className="py-2 pr-4">
+                              <button
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                onClick={async () => {
+                                  try {
+                                    const res = await employerApi.getApplicationDetails(app._id);
+                                    const payload = res.success && res.data?.success ? res.data.data : res.data;
+                                    setSelectedApplication(payload || app);
+                                  } catch {
+                                    setSelectedApplication(app);
+                                  } finally {
+                                    setShowApplicationModal(true);
+                                  }
+                                }}
+                              >
+                                <Eye className="h-4 w-4" /> View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Details Modal */}
+                <AnimatePresence>
+                  {showApplicationModal && selectedApplication && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"
+                    >
+                      <motion.div
+                        initial={{ y: 12, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 12, opacity: 0 }}
+                        className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border p-6"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-lg font-semibold text-gray-900">Application Details</h4>
+                          <button className="rounded-lg p-2 hover:bg-gray-100" onClick={() => setShowApplicationModal(false)}>
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+                        <div className="space-y-3 text-sm text-gray-700">
+                          <p><strong>Candidate:</strong> {selectedApplication.jobseekerId?.name} ({selectedApplication.jobseekerId?.email})</p>
+                          <p><strong>Internship:</strong> {selectedApplication.internshipId?.title} — {selectedApplication.internshipId?.companyName}</p>
+                          <p><strong>Status:</strong> {selectedApplication.status}</p>
+                          {selectedApplication.employerNotes && (
+                            <p><strong>Employer Notes:</strong> {selectedApplication.employerNotes}</p>
+                          )}
+                          {selectedApplication.additionalInfo?.resumeUrl && (
+                            <p><a className="text-blue-600 hover:underline" target="_blank" rel="noreferrer" href={selectedApplication.additionalInfo.resumeUrl}>View Resume</a></p>
+                          )}
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
             {activeSection === 'profile' && <Profile />}
             {activeSection === 'company' && <Company />}
             {activeSection === 'security' && <Security />}

@@ -347,14 +347,22 @@ router.delete('/users/:userId', [protect, adminAuth], async (req, res) => {
   try {
     const { userId } = req.params;
     
-    const user = await User.findByIdAndDelete(userId);
-    
+    const user = await User.findById(userId).select('role');
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
+
+    if (user.role === 'admin') {
+      return res.status(400).json({
+        success: false,
+        message: 'Deletion blocked: cannot delete admin users'
+      });
+    }
+
+    await User.findByIdAndDelete(userId);
     
     res.json({
       success: true,

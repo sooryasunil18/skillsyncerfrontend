@@ -160,10 +160,10 @@ const EmployerDashboard = () => {
         // Enhanced mock dashboard data for employer
         setDashboardData({
           stats: {
-            activeJobs: 12,
+            activeInternships: 12,
             totalApplications: 245,
-            interviewsScheduled: 18,
-            hiredCandidates: 8,
+            shortlistedCount: 0,
+            rejectedCount: 0,
             totalViews: 1847,
             responseRate: 76,
             avgTimeToHire: 14,
@@ -232,7 +232,7 @@ const EmployerDashboard = () => {
               avatar: '👨‍💼'
             }
           ],
-          activeJobs: [
+          activeInternshipsList: [
             { 
               id: 1, 
               title: 'Senior Full Stack Developer', 
@@ -363,6 +363,16 @@ const EmployerDashboard = () => {
         
         if (Array.isArray(internshipsData)) {
           setInternships(internshipsData);
+          // Update dashboard counts based on backend data
+          setDashboardData(prev => ({
+            ...(prev || {}),
+            stats: {
+              ...(prev?.stats || {}),
+              activeInternships: internshipsData.filter(i => i.status === 'active').length || 0,
+              totalApplications: internshipsData.reduce((sum, i) => sum + (Array.isArray(i.applications) ? i.applications.length : 0), 0) || 0
+            }
+          }));
+
           console.log('Successfully set internships:', internshipsData.length, 'items');
           if (internshipsData.length > 0) {
             setSuccessMessage(`Successfully loaded ${internshipsData.length} internship posting${internshipsData.length > 1 ? 's' : ''}`);
@@ -412,6 +422,18 @@ const EmployerDashboard = () => {
         const applicationsArray = Array.isArray(payload?.applications) ? payload.applications : (Array.isArray(payload) ? payload : []);
         console.log('Applications data (normalized):', applicationsArray);
         setApplications(applicationsArray);
+        // Update KPIs from applications by status
+        const shortlisted = applicationsArray.filter(a => a.status === 'shortlisted').length;
+        const rejected = applicationsArray.filter(a => a.status === 'rejected').length;
+        setDashboardData(prev => ({
+          ...(prev || {}),
+          stats: {
+            ...(prev?.stats || {}),
+            totalApplications: (payload?.pagination?.totalItems) || applicationsArray.length || 0,
+            shortlistedCount: shortlisted,
+            rejectedCount: rejected,
+          }
+        }));
       } else {
         console.error('Failed to load applications:', response.data?.message || response.message || 'No data received');
         setError(`Failed to load applications: ${response.data?.message || response.message || 'No data received'}`);
@@ -934,7 +956,7 @@ const EmployerDashboard = () => {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                   <Briefcase className="w-6 h-6 mr-3 text-blue-600" />
-                  Manage Jobs
+                  Manage Internships
                 </h2>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -943,12 +965,12 @@ const EmployerDashboard = () => {
                   className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium shadow-lg"
                 >
                   <Plus className="w-4 h-4 inline mr-2" />
-                  Post New Job
+                  Post New Internship
                 </motion.button>
               </div>
               
               <div className="space-y-4">
-                {dashboardData?.activeJobs?.map((job, index) => (
+                {dashboardData?.activeInternshipsList?.map((job, index) => (
                   <motion.div
                     key={job.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -1217,8 +1239,6 @@ const EmployerDashboard = () => {
                       <option>1-10 employees</option>
                       <option>11-50 employees</option>
                       <option>51-200 employees</option>
-                      <option>201-500 employees</option>
-                      <option>501+ employees</option>
                     </select>
                   </div>
                 </div>
@@ -1433,7 +1453,7 @@ const EmployerDashboard = () => {
                   <IconComponent className="w-5 h-5" />
                   <span className="font-medium">{item.name}</span>
                   {item.section === 'applications' && (
-                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">12</span>
+                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full"></span>
                   )}
                 </motion.button>
               );
@@ -1781,13 +1801,13 @@ const EmployerDashboard = () => {
                         <ArrowUpRight className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
                         +12%
                       </div>
-                      <span className="text-xs text-gray-500">vs last month</span>
+                      <span className="text-xs text-gray-500">vs last week</span>
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs lg:text-sm font-medium text-gray-600 mb-1">Active Jobs</p>
+                    <p className="text-xs lg:text-sm font-medium text-gray-600 mb-1">Active Internships</p>
                     <p className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-                      {dashboardData?.stats?.activeJobs || 0}
+                      {dashboardData?.stats?.activeInternships || 0}
                     </p>
                     <div className="w-full bg-blue-200 rounded-full h-1.5 lg:h-2">
                       <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-1.5 lg:h-2 rounded-full" style={{ width: '75%' }}></div>
@@ -1851,9 +1871,9 @@ const EmployerDashboard = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Interviews Scheduled</p>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Shortlisted</p>
                     <p className="text-3xl font-bold text-gray-900 mb-2">
-                      {dashboardData?.stats?.interviewsScheduled || 0}
+                      {dashboardData?.stats?.shortlistedCount || 0}
                     </p>
                     <div className="w-full bg-orange-200 rounded-full h-2">
                       <div className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full" style={{ width: '60%' }}></div>
@@ -1884,9 +1904,9 @@ const EmployerDashboard = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Hired Candidates</p>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Rejected</p>
                     <p className="text-3xl font-bold text-gray-900 mb-2">
-                      {dashboardData?.stats?.hiredCandidates || 0}
+                      {dashboardData?.stats?.rejectedCount || 0}
                     </p>
                     <div className="w-full bg-purple-200 rounded-full h-2">
                       <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full" style={{ width: '90%' }}></div>
@@ -2216,8 +2236,8 @@ const EmployerDashboard = () => {
                   <h4 className="font-semibold text-gray-900 mb-3">Quick Stats</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-blue-50 rounded-xl p-3">
-                      <p className="text-lg font-bold text-blue-600">{dashboardData?.stats?.activeJobs || 0}</p>
-                      <p className="text-xs text-gray-600">Active Jobs</p>
+                      <p className="text-lg font-bold text-blue-600">{dashboardData?.stats?.activeInternships || 0}</p>
+                      <p className="text-xs text-gray-600">Active Internships</p>
                     </div>
                     <div className="bg-green-50 rounded-xl p-3">
                       <p className="text-lg font-bold text-green-600">{dashboardData?.stats?.totalApplications || 0}</p>

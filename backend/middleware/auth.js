@@ -45,7 +45,6 @@ const protect = async (req, res, next) => {
           message: 'User account is deactivated'
         });
       }
-
       req.user = user;
       next();
     } catch (error) {

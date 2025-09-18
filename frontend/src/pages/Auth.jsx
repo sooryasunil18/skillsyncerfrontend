@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { API_BASE_URL } from '../config/api';
 import {
@@ -184,6 +184,13 @@ const Auth = () => {
           setLoading(false);
           return;
         }
+
+        // Company name should only contain letters and spaces
+        if (!/^[a-zA-Z\s]+$/.test(formData.companyName.trim())) {
+          setError('Company name can only contain letters and spaces');
+          setLoading(false);
+          return;
+        }
         
         if (!formData.companyEmail.trim()) {
           setError('Company email is required');
@@ -362,17 +369,15 @@ const Auth = () => {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // Send user data to your backend
+      // Send idToken to your backend
+      const idToken = await user.getIdToken();
       const response = await fetch(`${API_BASE_URL}/api/auth/google-signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          uid: user.uid,
-          email: user.email,
-          name: user.displayName,
-          photoURL: user.photoURL,
+          idToken,
           role: 'jobseeker' // Only for jobseekers
         }),
       });
@@ -402,6 +407,33 @@ const Auth = () => {
       } else {
         setError('Google sign-in failed. Please try again.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Forgot password via Firebase
+  const handleForgotPassword = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setError('');
+    const email = (formData.email || '').trim();
+    if (!email) {
+      setError('Please enter your email to reset the password');
+      return;
+    }
+    setLoading(true);
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      setSuccessMessage('If this email is registered, a reset link has been sent. Please check your inbox.');
+      setShowSuccessModal(true);
+    } catch (err) {
+      console.error('Password reset error:', err);
+      setSuccessMessage('If this email is registered, a reset link has been sent. Please check your inbox.');
+      setShowSuccessModal(true);
     } finally {
       setLoading(false);
     }
@@ -454,6 +486,8 @@ const Auth = () => {
           errors[name] = 'Company name is required';
         } else if (value.trim().length < 2) {
           errors[name] = 'Company name must be at least 2 characters long';
+        } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
+          errors[name] = 'Company name can only contain letters and spaces';
         }
         break;
 
@@ -1061,7 +1095,7 @@ const Auth = () => {
                         <input type="checkbox" className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
                         <span className="ml-2 text-sm text-gray-600">Remember me</span>
                       </label>
-                      <a href="#" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+                      <a href="/forgot-password" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
                         Forgot password?
                       </a>
                     </div>

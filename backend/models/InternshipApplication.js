@@ -31,7 +31,7 @@ const InternshipApplicationSchema = new mongoose.Schema({
     startDate: Date,
     workMode: {
       type: String,
-      enum: ['Onsite', 'Remote', 'Hybrid']
+      enum: ['Onsite', 'online', 'Hybrid']
     },
     eligibility: {
       type: String,

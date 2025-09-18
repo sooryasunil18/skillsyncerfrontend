@@ -13,7 +13,7 @@ const InternshipPostingSchema = new mongoose.Schema({
   industry: {
     type: String,
     required: [true, 'Industry is required'],
-    enum: ['IT/Technology', 'Banking', 'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Consulting', 'Media', 'Real Estate', 'Automotive', 'Food & Beverage', 'Non-Profit', 'Government', 'Other'],
+    enum: ['IT/Technology', 'Banking','Education', 'Other'],
     default: 'IT/Technology'
   },
   
@@ -40,7 +40,7 @@ const InternshipPostingSchema = new mongoose.Schema({
   mode: {
     type: String,
     required: [true, 'Mode is required'],
-    enum: ['Online', 'Offline', 'Remote', 'Hybrid'],
+    enum: ['Online', 'Offline','Hybrid'],
     default: 'Offline'
   },
   
@@ -67,7 +67,7 @@ const InternshipPostingSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'Total available seats is required'],
     min: [1, 'At least 1 seat must be available'],
-    max: [1000, 'Cannot exceed 1000 seats']
+    max: [60, 'Cannot exceed 60 seats']
   },
   
   availableSeats: {

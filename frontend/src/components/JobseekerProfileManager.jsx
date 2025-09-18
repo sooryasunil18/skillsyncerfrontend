@@ -68,6 +68,261 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
     phone: localStorage.getItem('userPhone') || ''
   });
 
+  // Validation state for all fields
+  const [validationErrors, setValidationErrors] = useState({
+    name: '',
+    phone: '',
+    degree: '',
+    specialization: '',
+    institution: '',
+    year: '',
+    skill: '',
+    internshipTitle: '',
+    preferredLocation: '',
+    resume: ''
+  });
+
+  // Validation functions
+  const validateName = (name) => {
+    if (!name || name.trim().length === 0) {
+      return 'Full name is required';
+    }
+    if (name.trim().length < 2) {
+      return 'Full name must be at least 2 characters long';
+    }
+    if (name.trim().length > 50) {
+      return 'Full name must be less than 50 characters';
+    }
+    if (!/^[a-zA-Z\s.]+$/.test(name.trim())) {
+      return 'Full name can only contain letters, spaces, and dots';
+    }
+    return '';
+  };
+
+  const validatePhone = (phone) => {
+    if (!phone || phone.trim().length === 0) {
+      return 'Phone number is required';
+    }
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!/^[6789]/.test(cleanPhone)) {
+      return 'Phone number must start with 6, 7, 8, or 9';
+    }
+    if (cleanPhone.length !== 10) {
+      return 'Phone number must be exactly 10 digits';
+    }
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return 'Phone number must contain only digits';
+    }
+    return '';
+  };
+
+  const validateDegree = (degree) => {
+    if (!degree || degree.trim().length === 0) {
+      return 'Degree is required';
+    }
+    if (degree.trim().length < 2) {
+      return 'Degree must be at least 2 characters long';
+    }
+    if (degree.trim().length > 100) {
+      return 'Degree must be less than 100 characters';
+    }
+    if (!/^[a-zA-Z\s]+$/.test(degree.trim())) {
+      return 'Degree can only contain letters and spaces';
+    }
+    return '';
+  };
+
+  const validateInstitution = (institution) => {
+    if (!institution || institution.trim().length === 0) {
+      return 'Institution name is required';
+    }
+    if (institution.trim().length < 2) {
+      return 'Institution name must be at least 2 characters long';
+    }
+    if (institution.trim().length > 200) {
+      return 'Institution name must be less than 200 characters';
+    }
+    if (!/^[a-zA-Z\s]+$/.test(institution.trim())) {
+      return 'Institution name can only contain letters and spaces';
+    }
+    return '';
+  };
+
+  const validateSpecialization = (specialization) => {
+    if (specialization && specialization.trim().length > 0) {
+      if (specialization.trim().length < 2) {
+        return 'Specialization must be at least 2 characters long';
+      }
+      if (specialization.trim().length > 100) {
+        return 'Specialization must be less than 100 characters';
+      }
+      if (!/^[a-zA-Z\s]+$/.test(specialization.trim())) {
+        return 'Specialization can only contain letters and spaces';
+      }
+    }
+    return '';
+  };
+
+  const validateYear = (year) => {
+    if (!year || year.trim().length === 0) {
+      return 'Year is required';
+    }
+    const yearNum = parseInt(year);
+    const currentYear = new Date().getFullYear();
+    if (isNaN(yearNum)) {
+      return 'Year must be a valid number';
+    }
+    if (yearNum < 1950) {
+      return 'Year must be after 1950';
+    }
+    if (yearNum > currentYear + 5) {
+      return 'Year cannot be more than 5 years in the future';
+    }
+    return '';
+  };
+
+  const validateSkill = (skill) => {
+    if (!skill || skill.trim().length === 0) {
+      return 'Skill name is required';
+    }
+    if (skill.trim().length < 2) {
+      return 'Skill name must be at least 2 characters long';
+    }
+    if (skill.trim().length > 50) {
+      return 'Skill name must be less than 50 characters';
+    }
+    // Check if skill starts with a number
+    if (/^[0-9]/.test(skill.trim())) {
+      return 'Skill name cannot start with a number';
+    }
+    // Allow letters, spaces, dots, slashes, plus signs, hyphens, and # symbol
+    if (!/^[a-zA-Z\s.#+\-/]+$/.test(skill.trim())) {
+      return 'Skill name contains invalid characters. Only letters, spaces, dots, slashes, plus signs, hyphens, and # symbol are allowed';
+    }
+    return '';
+  };
+
+  const validateInternshipTitle = (title) => {
+    if (!title || title.trim().length === 0) {
+      return 'Internship title is required';
+    }
+    return '';
+  };
+
+  const validatePreferredLocation = (location) => {
+    if (!location || location.trim().length === 0) {
+      return 'Preferred location is required';
+    }
+    return '';
+  };
+
+  const validateResume = (file) => {
+    if (!file) {
+      return 'Resume file is required';
+    }
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      return 'Please upload a PDF or DOC file only';
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return 'File size must be less than 5MB';
+    }
+    return '';
+  };
+
+  // Update validation error for a specific field
+  const updateValidationError = (field, error) => {
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+  };
+
+  // Clear all validation errors
+  const clearAllValidationErrors = () => {
+    setValidationErrors({
+      name: '',
+      phone: '',
+      degree: '',
+      specialization: '',
+      institution: '',
+      year: '',
+      skill: '',
+      internshipTitle: '',
+      preferredLocation: '',
+      resume: ''
+    });
+  };
+
+  // Check if form has any validation errors
+  const hasValidationErrors = () => {
+    return Object.values(validationErrors).some(error => error !== '');
+  };
+
+  // Handle field changes with validation
+  const handleNameChange = (e) => {
+    const name = e.target.value;
+    setUserData(prev => ({ ...prev, name }));
+    const error = validateName(name);
+    updateValidationError('name', error);
+  };
+
+  const handlePhoneChange = (e) => {
+    const phone = e.target.value;
+    setUserData(prev => ({ ...prev, phone }));
+    const error = validatePhone(phone);
+    updateValidationError('phone', error);
+  };
+
+  const handleDegreeChange = (e) => {
+    const degree = e.target.value;
+    setNewEducation(prev => ({ ...prev, degree }));
+    const error = validateDegree(degree);
+    updateValidationError('degree', error);
+  };
+
+  const handleInstitutionChange = (e) => {
+    const institution = e.target.value;
+    setNewEducation(prev => ({ ...prev, institution }));
+    const error = validateInstitution(institution);
+    updateValidationError('institution', error);
+  };
+
+  const handleSpecializationChange = (e) => {
+    const specialization = e.target.value;
+    setNewEducation(prev => ({ ...prev, specialization }));
+    const error = validateSpecialization(specialization);
+    updateValidationError('specialization', error);
+  };
+
+  const handleYearChange = (e) => {
+    const year = e.target.value;
+    setNewEducation(prev => ({ ...prev, year }));
+    const error = validateYear(year);
+    updateValidationError('year', error);
+  };
+
+  const handleSkillChange = (e) => {
+    const skill = e.target.value;
+    setNewSkill(skill);
+    const error = validateSkill(skill);
+    updateValidationError('skill', error);
+  };
+
+  const handleInternshipTitleChange = (e) => {
+    const title = e.target.value;
+    setProfileData(prev => ({ ...prev, internshipTitle: title }));
+    const error = validateInternshipTitle(title);
+    updateValidationError('internshipTitle', error);
+  };
+
+  const handlePreferredLocationChange = (e) => {
+    const location = e.target.value;
+    setProfileData(prev => ({ ...prev, preferredLocation: location }));
+    const error = validatePreferredLocation(location);
+    updateValidationError('preferredLocation', error);
+  };
+
   // Internship type options
   const internshipTypeOptions = [
     '15 days',
@@ -190,6 +445,46 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
       setIsSaving(true);
       setError('');
       setSuccess('');
+      clearAllValidationErrors();
+
+      // Comprehensive validation before saving
+      const nameError = validateName(userData.name);
+      const phoneError = validatePhone(userData.phone);
+      const internshipTitleError = validateInternshipTitle(profileData.internshipTitle);
+      const preferredLocationError = validatePreferredLocation(profileData.preferredLocation);
+
+      // Check education entries
+      let educationErrors = [];
+      if (!profileData.education || profileData.education.length === 0) {
+        educationErrors.push('At least one education entry is required');
+      } else {
+        profileData.education.forEach((edu, index) => {
+          const degreeError = validateDegree(edu.degree);
+          const institutionError = validateInstitution(edu.institution);
+          const yearError = validateYear(edu.year);
+          if (degreeError || institutionError || yearError) {
+            educationErrors.push(`Education entry ${index + 1}: ${degreeError || institutionError || yearError}`);
+          }
+        });
+      }
+
+      // Check skills
+      let skillsError = '';
+      if (!profileData.skills || profileData.skills.length === 0) {
+        skillsError = 'At least one skill is required';
+      }
+
+      // Update validation errors
+      updateValidationError('name', nameError);
+      updateValidationError('phone', phoneError);
+      updateValidationError('internshipTitle', internshipTitleError);
+      updateValidationError('preferredLocation', preferredLocationError);
+
+      // Check if there are any validation errors
+      if (nameError || phoneError || internshipTitleError || preferredLocationError || educationErrors.length > 0 || skillsError) {
+        setError('Please fix all validation errors before saving.');
+        return;
+      }
 
       const userId = localStorage.getItem('userId');
       const endpoint = profileData._id ? 
@@ -207,12 +502,6 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
         preferredLocation: profileData.preferredLocation,
         readyToWorkAfterInternship: profileData.readyToWorkAfterInternship
       };
-
-      // Front-end validation mirroring backend requirement
-      if (!payload.education || payload.education.length === 0) {
-        setError('Please add at least one education entry before saving.');
-        return;
-      }
 
       // Also update User basic fields (name/phone) when present
       const basicUpdates = {};
@@ -265,18 +554,16 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowedTypes.includes(file.type)) {
-      setError('Please upload a PDF or DOC file');
+    // Validate file
+    const fileError = validateResume(file);
+    if (fileError) {
+      updateValidationError('resume', fileError);
+      setError(fileError);
       return;
     }
 
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size must be less than 5MB');
-      return;
-    }
+    // Clear validation error
+    updateValidationError('resume', '');
 
     try {
       setIsUploading(true);
@@ -309,12 +596,21 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
   };
 
   const handleAddSkill = () => {
+    const skillError = validateSkill(newSkill);
+    updateValidationError('skill', skillError);
+    
+    if (skillError) {
+      setError(skillError);
+      return;
+    }
+
     if (newSkill.trim() && !profileData.skills.includes(newSkill.trim())) {
       setProfileData(prev => ({
         ...prev,
         skills: [...prev.skills, newSkill.trim()]
       }));
       setNewSkill('');
+      updateValidationError('skill', '');
     }
   };
 
@@ -326,12 +622,31 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
   };
 
   const handleAddEducation = () => {
+    const degreeError = validateDegree(newEducation.degree);
+    const institutionError = validateInstitution(newEducation.institution);
+    const yearError = validateYear(newEducation.year);
+    const specializationError = validateSpecialization(newEducation.specialization);
+    
+    updateValidationError('degree', degreeError);
+    updateValidationError('institution', institutionError);
+    updateValidationError('year', yearError);
+    updateValidationError('specialization', specializationError);
+    
+    if (degreeError || institutionError || yearError || specializationError) {
+      setError('Please fix all education field errors before adding.');
+      return;
+    }
+
     if (newEducation.degree && newEducation.institution && newEducation.year) {
       setProfileData(prev => ({
         ...prev,
         education: [...prev.education, { ...newEducation }]
       }));
       setNewEducation({ degree: '', specialization: '', institution: '', year: '' });
+      updateValidationError('degree', '');
+      updateValidationError('institution', '');
+      updateValidationError('year', '');
+      updateValidationError('specialization', '');
     }
   };
 
@@ -597,17 +912,31 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                     <input
                       type="text"
                       value={userData.phone}
-                      onChange={(e) => setUserData(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="Your phone number"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={handlePhoneChange}
+                      placeholder="Your phone number (e.g., 9876543210)"
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                        validationErrors.phone 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
                     />
+                    {validationErrors.phone && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.phone}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Location</label>
                     <select
                       value={profileData.preferredLocation}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, preferredLocation: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={handlePreferredLocationChange}
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                        validationErrors.preferredLocation 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
                     >
                       {profileData.preferredLocation && !indiaLocationOptions.includes(profileData.preferredLocation) && (
                         <option value={profileData.preferredLocation}>{profileData.preferredLocation}</option>
@@ -618,6 +947,12 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                       ))}
                       <option value="Other">Other</option>
                     </select>
+                    {validationErrors.preferredLocation && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.preferredLocation}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -643,10 +978,20 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                     <input
                       type="text"
                       value={userData.name}
-                      onChange={(e) => setUserData(prev => ({ ...prev, name: e.target.value }))}
+                      onChange={handleNameChange}
                       placeholder="Your full name"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                        validationErrors.name 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
                     />
+                    {validationErrors.name && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.name}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email (read-only)</label>
@@ -662,10 +1007,20 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                     <input
                       type="text"
                       value={userData.phone}
-                      onChange={(e) => setUserData(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="Your phone number"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={handlePhoneChange}
+                      placeholder="Your phone number (e.g., 9876543210)"
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                        validationErrors.phone 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
                     />
+                    {validationErrors.phone && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.phone}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -677,14 +1032,22 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                   Upload Resume
                 </h3>
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={handleResumeUpload}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    />
-                    {isUploading && <Loader className="animate-spin h-5 w-5 text-blue-600" />}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-4">
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={handleResumeUpload}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      {isUploading && <Loader className="animate-spin h-5 w-5 text-blue-600" />}
+                    </div>
+                    {validationErrors.resume && (
+                      <p className="text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.resume}
+                      </p>
+                    )}
                   </div>
                   {profileData.resumeUrl && (
                     <div className="flex items-center space-x-4">
@@ -734,34 +1097,82 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                   <div className="bg-white rounded-lg p-4 border">
                     <h4 className="font-medium text-gray-900 mb-3">Add New Education</h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                      <input
-                        type="text"
-                        placeholder="Degree"
-                        value={newEducation.degree}
-                        onChange={(e) => setNewEducation(prev => ({ ...prev, degree: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Specialization"
-                        value={newEducation.specialization}
-                        onChange={(e) => setNewEducation(prev => ({ ...prev, specialization: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Institution"
-                        value={newEducation.institution}
-                        onChange={(e) => setNewEducation(prev => ({ ...prev, institution: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Year"
-                        value={newEducation.year}
-                        onChange={(e) => setNewEducation(prev => ({ ...prev, year: e.target.value }))}
-                        className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Degree"
+                          value={newEducation.degree}
+                          onChange={handleDegreeChange}
+                          className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 w-full ${
+                            validationErrors.degree 
+                              ? 'border-red-500 focus:ring-red-500' 
+                              : 'border-gray-300 focus:ring-blue-500'
+                          }`}
+                        />
+                        {validationErrors.degree && (
+                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {validationErrors.degree}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Specialization"
+                          value={newEducation.specialization}
+                          onChange={handleSpecializationChange}
+                          className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 w-full ${
+                            validationErrors.specialization 
+                              ? 'border-red-500 focus:ring-red-500' 
+                              : 'border-gray-300 focus:ring-blue-500'
+                          }`}
+                        />
+                        {validationErrors.specialization && (
+                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {validationErrors.specialization}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Institution"
+                          value={newEducation.institution}
+                          onChange={handleInstitutionChange}
+                          className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 w-full ${
+                            validationErrors.institution 
+                              ? 'border-red-500 focus:ring-red-500' 
+                              : 'border-gray-300 focus:ring-blue-500'
+                          }`}
+                        />
+                        {validationErrors.institution && (
+                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {validationErrors.institution}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Year"
+                          value={newEducation.year}
+                          onChange={handleYearChange}
+                          className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 w-full ${
+                            validationErrors.year 
+                              ? 'border-red-500 focus:ring-red-500' 
+                              : 'border-gray-300 focus:ring-blue-500'
+                          }`}
+                        />
+                        {validationErrors.year && (
+                          <p className="mt-1 text-xs text-red-600 flex items-center">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {validationErrors.year}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <button
                       onClick={handleAddEducation}
@@ -800,22 +1211,34 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                     </div>
                   )}
                   
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      placeholder="Add a skill"
-                      value={newSkill}
-                      onChange={(e) => setNewSkill(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={handleAddSkill}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        placeholder="Add a skill"
+                        value={newSkill}
+                        onChange={handleSkillChange}
+                        onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+                        className={`flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                          validationErrors.skill 
+                            ? 'border-red-500 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
+                      <button
+                        onClick={handleAddSkill}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add
+                      </button>
+                    </div>
+                    {validationErrors.skill && (
+                      <p className="text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.skill}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -833,8 +1256,12 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                     </label>
                     <select
                       value={profileData.internshipTitle}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, internshipTitle: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={handleInternshipTitleChange}
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                        validationErrors.internshipTitle 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
                     >
                       {profileData.internshipTitle && !itInternshipTitleOptions.includes(profileData.internshipTitle) && (
                         <option value={profileData.internshipTitle}>{profileData.internshipTitle}</option>
@@ -845,6 +1272,12 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                       ))}
                       <option value="Other">Other</option>
                     </select>
+                    {validationErrors.internshipTitle && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.internshipTitle}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -866,8 +1299,12 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                     </label>
                     <select
                       value={profileData.preferredLocation}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, preferredLocation: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={handlePreferredLocationChange}
+                      className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                        validationErrors.preferredLocation 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
                     >
                       {profileData.preferredLocation && !indiaLocationOptions.includes(profileData.preferredLocation) && (
                         <option value={profileData.preferredLocation}>{profileData.preferredLocation}</option>
@@ -878,6 +1315,12 @@ const JobseekerProfileManager = ({ onClose, initialData = {} }) => {
                       ))}
                       <option value="Other">Other</option>
                     </select>
+                    {validationErrors.preferredLocation && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        {validationErrors.preferredLocation}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center">
                     <input

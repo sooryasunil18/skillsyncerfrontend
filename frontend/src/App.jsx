@@ -8,7 +8,9 @@ import Features from './pages/Features';
 import HowItWorks from './pages/HowItWorks';
 import Contact from './pages/Contact';
 import Auth from './pages/Auth';
+import ForgotPassword from './pages/ForgotPassword';
 import EmployerInfo from './pages/EmployerInfo';
+import ResetPassword from './pages/ResetPassword';
 import JobseekerDashboard from './pages/JobseekerDashboard';
 import EmployerDashboard from './pages/EmployerDashboard';
 import MentorDashboard from './pages/MentorDashboard';
@@ -43,6 +45,8 @@ function Layout() {
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/employer-info" element={<EmployerInfo />} />
           <Route path="/jobseeker-dashboard" element={<JobseekerDashboard />} />
           <Route path="/employer-dashboard" element={<EmployerDashboard />} />

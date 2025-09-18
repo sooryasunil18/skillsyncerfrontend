@@ -320,6 +320,29 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
     }));
   };
 
+  // Phone validation function for Indian mobile numbers
+  const validateIndianPhoneNumber = (phone) => {
+    // Remove all non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    // Check if phone number starts with 6, 7, 8, or 9
+    if (!/^[6789]/.test(cleanPhone)) {
+      return 'Phone number must start with 6, 7, 8, or 9';
+    }
+    
+    // Check if phone number is exactly 10 digits
+    if (cleanPhone.length !== 10) {
+      return 'Phone number must be exactly 10 digits';
+    }
+    
+    // Check if all characters are digits
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return 'Phone number must contain only digits';
+    }
+    
+    return ''; // No error
+  };
+
   const validateStep = (step) => {
     const newErrors = {};
 
@@ -336,6 +359,12 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
         }
         if (!(formData.personalDetails.contactNumber || '').trim()) {
           newErrors['personalDetails.contactNumber'] = 'Contact number is required';
+        } else {
+          // Validate phone number format if provided
+          const phoneValidationError = validateIndianPhoneNumber(formData.personalDetails.contactNumber);
+          if (phoneValidationError) {
+            newErrors['personalDetails.contactNumber'] = phoneValidationError;
+          }
         }
         if (!(formData.personalDetails.emailAddress || '').trim()) {
           newErrors['personalDetails.emailAddress'] = 'Email address is required';
@@ -414,7 +443,7 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
           type: internship.stipend?.type === 'Unpaid' ? 'Unpaid' : 'Paid',
           duration: internship.duration,
           startDate: internship.startDate,
-          workMode: internship.mode === 'Online' ? 'Remote' : internship.mode === 'Offline' ? 'Onsite' : internship.mode,
+          workMode: internship.mode === 'Online' ? 'online' : internship.mode === 'Offline' ? 'Onsite' : internship.mode,
           eligibility: normalizedEligibility
         }
       };
@@ -525,10 +554,10 @@ const InternshipApplicationForm = ({ internship, isOpen, onClose, onSuccess }) =
                   type="tel"
                   value={formData.personalDetails.contactNumber}
                   onChange={(e) => handleInputChange('personalDetails', 'contactNumber', e.target.value)}
+                  placeholder="Enter 10-digit mobile number (e.g., 9876543210)"
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors['personalDetails.contactNumber'] ? 'border-red-500' : 'border-gray-300'
                   }`}
-                  placeholder="Enter your contact number"
                 />
                 {errors['personalDetails.contactNumber'] && (
                   <p className="text-red-500 text-sm mt-1">{errors['personalDetails.contactNumber']}</p>

@@ -1,7 +1,9 @@
 const express = require('express');
 const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
-const admin = require('firebase-admin');
+const admin = require('../utils/firebase');
+const crypto = require('crypto');
+const { sendNotificationEmail } = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -545,21 +547,104 @@ router.put('/change-password', protect, async (req, res) => {
   }
 });
 
+// @desc    Forgot password - send reset email
+// @route   POST /api/auth/forgot-password
+// @access  Public
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Avoid user enumeration
+      return res.json({ success: true, message: 'If that email exists, a reset link has been sent' });
+    }
+
+    // Generate secure token and expiry (1 hour)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+    await user.save();
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+
+    const htmlMsg = `
+      <p>We received a request to reset your SkillSyncer account password.</p>
+      <p>Click the button below to reset your password. This link is valid for 1 hour.</p>
+      <p style="text-align:center;margin:24px 0;">
+        <a href="${resetUrl}" style="background:#2563eb;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;">Reset Password</a>
+      </p>
+      <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>If you didn’t request this, you can safely ignore this email.</p>
+    `;
+
+    // Send email
+    await sendNotificationEmail(user.email, 'Reset your SkillSyncer password', htmlMsg);
+
+    return res.json({
+      success: true,
+      message: 'If that email exists, a reset link has been sent'
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    return res.status(500).json({ success: false, message: 'Server error while sending reset email' });
+  }
+});
+
+// @desc    Reset password using token
+// @route   POST /api/auth/reset-password
+// @access  Public
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, email, newPassword } = req.body;
+
+    if (!token || !email || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Token, email and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      email,
+      resetPasswordToken: tokenHash,
+      resetPasswordExpires: { $gt: Date.now() }
+    }).select('+password');
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Token is invalid or expired' });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return res.json({ success: true, message: 'Password has been reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return res.status(500).json({ success: false, message: 'Server error while resetting password' });
+  }
+});
+
 // @desc    Google Sign-in for jobseekers
 // @route   POST /api/auth/google-signin
 // @access  Public
 router.post('/google-signin', async (req, res) => {
   try {
-    const { uid, email, name, photoURL, role } = req.body;
+    const { idToken, role } = req.body;
 
-    console.log('Google sign-in attempt:', { uid, email, name, role });
-
-    // Validation
-    if (!uid || !email || !name) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required Google user data'
-      });
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: 'idToken is required' });
     }
 
     // Only allow jobseekers for Google sign-in
@@ -568,6 +653,26 @@ router.post('/google-signin', async (req, res) => {
         success: false,
         message: 'Google sign-in is only available for job seekers'
       });
+    }
+
+    // Verify Google ID token via Firebase Admin (with guard for initialization)
+    if (!admin.apps || admin.apps.length === 0) {
+      console.error('Firebase Admin not initialized. Check FIREBASE_* env vars or FIREBASE_SERVICE_ACCOUNT.');
+      return res.status(500).json({
+        success: false,
+        message: 'Server auth not configured. Please try again later.'
+      });
+    }
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const uid = decoded.uid;
+    const email = decoded.email;
+    const name = decoded.name || '';
+    const photoURL = decoded.picture || '';
+
+    console.log('Google sign-in verified:', { uid, email, namePresent: !!name });
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Google token missing email' });
     }
 
     // Check if user already exists
@@ -597,7 +702,7 @@ router.post('/google-signin', async (req, res) => {
     } else {
       // Create new user with Google data
       user = await User.create({
-        name,
+        name: name || email.split('@')[0],
         email,
         googleId: uid,
         role: 'jobseeker',
@@ -627,7 +732,7 @@ router.post('/google-signin', async (req, res) => {
 
     res.json({
       success: true,
-      message: user.googleId === uid ? 'Google sign-in successful' : 'Account created and signed in successfully',
+      message: 'Google sign-in successful',
       data: {
         user: userResponse,
         token,
@@ -637,7 +742,7 @@ router.post('/google-signin', async (req, res) => {
 
   } catch (error) {
     console.error('Google sign-in error:', error);
-    
+
     // Handle duplicate email error
     if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
       return res.status(400).json({
@@ -645,7 +750,7 @@ router.post('/google-signin', async (req, res) => {
         message: 'An account with this email already exists'
       });
     }
-    
+
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);

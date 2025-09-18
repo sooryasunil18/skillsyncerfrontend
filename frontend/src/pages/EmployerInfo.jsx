@@ -195,7 +195,17 @@ const EmployerInfo = () => {
               className="relative"
             >
               <div className="relative">
-                <div className="w-full max-w-lg mx-auto h-96 bg-gradient-to-br from-blue-100 via-purple-100 to-indigo-100 rounded-3xl flex flex-col items-center justify-center shadow-2xl">
+                {/* Replace placeholder with static image, keep fallback */}
+                <img 
+                  src="/Student-internship1.jpg" 
+                  alt="Recruit with us - Employer Platform"
+                  className="w-full max-w-lg mx-auto h-96 object-cover rounded-3xl shadow-2xl"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="w-full max-w-lg mx-auto h-96 bg-gradient-to-br from-blue-100 via-purple-100 to-indigo-100 rounded-3xl flex-col items-center justify-center shadow-2xl hidden">
                   <div className="text-center">
                     <div className="w-24 h-24 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Building className="w-12 h-12 text-white" />
