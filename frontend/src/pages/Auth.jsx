@@ -291,8 +291,13 @@ const Auth = () => {
           localStorage.setItem('userEmail', data.data.user.email);
           // Persist userId for subsequent profile requests
           localStorage.setItem('userId', data.data.user._id || data.data.user.id);
+          
+          // Store secondary roles if they exist
+          if (data.data.user.secondaryRoles && data.data.user.secondaryRoles.length > 0) {
+            localStorage.setItem('secondaryRoles', JSON.stringify(data.data.user.secondaryRoles));
+          }
 
-          // Redirect based on role
+          // Redirect based on primary role
           if (data.data.user.role === 'jobseeker') {
             navigate('/jobseeker-dashboard');
           } else if (data.data.user.role === 'employer' || data.data.user.role === 'company') {

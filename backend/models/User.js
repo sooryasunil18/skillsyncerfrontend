@@ -41,6 +41,11 @@ const userSchema = new mongoose.Schema({
     default: 'jobseeker',
     required: true
   },
+  // Secondary roles for users with multiple capabilities
+  secondaryRoles: [{
+    type: String,
+    enum: ['jobseeker', 'employer', 'company', 'mentor', 'admin', 'employee']
+  }],
   // Jobseeker specific fields
   profile: {
     avatar: {
@@ -284,6 +289,20 @@ userSchema.pre('save', async function(next) {
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Check if user has a specific role (primary or secondary)
+userSchema.methods.hasRole = function(role) {
+  return this.role === role || (this.secondaryRoles && this.secondaryRoles.includes(role));
+};
+
+// Get all roles for a user (primary + secondary)
+userSchema.methods.getAllRoles = function() {
+  const roles = [this.role];
+  if (this.secondaryRoles && this.secondaryRoles.length > 0) {
+    roles.push(...this.secondaryRoles);
+  }
+  return [...new Set(roles)]; // Remove duplicates
 };
 
   // Calculate profile completion

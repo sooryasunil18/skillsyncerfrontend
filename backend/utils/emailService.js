@@ -12,7 +12,7 @@ const createTransporter = () => {
 };
 
 // Send mentor credentials email
-const sendMentorCredentials = async (mentorEmail, mentorName, tempPassword) => {
+const sendMentorCredentials = async (mentorEmail, mentorName, tempPassword, companyName = '') => {
   console.log('🔄 Attempting to send mentor credentials email...');
   console.log('📧 To:', mentorEmail);
   console.log('👤 Name:', mentorName);
@@ -34,12 +34,15 @@ const sendMentorCredentials = async (mentorEmail, mentorName, tempPassword) => {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333; text-align: center;">Welcome to SkillSyncer!</h2>
           <p>Dear ${mentorName},</p>
-          <p>Your mentor account has been created successfully. Here are your login credentials:</p>
+          <p>Your mentor account has been created successfully${companyName ? ` for ${companyName}` : ''}. Here are your login credentials:</p>
           
           <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
             <p><strong>Email:</strong> ${mentorEmail}</p>
             <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+            ${companyName ? `<p><strong>Company:</strong> ${companyName}</p>` : ''}
           </div>
+          
+          <p><strong>Password Information:</strong> Your password is auto-generated based on your name, company, and phone number for easy memorization.</p>
           
           <p><strong>Important:</strong> Please change your password after your first login for security purposes.</p>
           

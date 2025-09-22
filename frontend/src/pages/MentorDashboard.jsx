@@ -37,7 +37,8 @@ import {
   Globe,
   BookOpen,
   MessageCircle,
-  Video
+  Video,
+  Briefcase
 } from 'lucide-react';
 
 const MentorDashboard = () => {
@@ -47,6 +48,7 @@ const MentorDashboard = () => {
   const [mentorData, setMentorData] = useState({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifications, setNotifications] = useState(2);
+  const [secondaryRoles, setSecondaryRoles] = useState([]);
   const navigate = useNavigate();
 
   // Update time every second
@@ -59,8 +61,32 @@ const MentorDashboard = () => {
 
   // Fetch mentor data on component mount
   useEffect(() => {
+    const init = () => {
+      const token = localStorage.getItem('token');
+      const role = localStorage.getItem('userRole');
+      
+      if (!token) {
+        navigate('/auth');
+        return;
+      }
+      
+      // Check if user has mentor role (primary or secondary)
+      const storedSecondaryRoles = localStorage.getItem('secondaryRoles');
+      const secondaryRoles = storedSecondaryRoles ? JSON.parse(storedSecondaryRoles) : [];
+      const hasMentorRole = role === 'mentor' || secondaryRoles.includes('mentor');
+      
+      
+      if (!hasMentorRole) {
+        navigate('/auth');
+        return;
+      }
+      
+      setSecondaryRoles(secondaryRoles);
+    };
+    
+    init();
     fetchMentorData();
-  }, []);
+  }, [navigate]);
 
   const fetchMentorData = async () => {
     try {
@@ -74,6 +100,11 @@ const MentorDashboard = () => {
       const data = await response.json();
       if (data.success) {
         setMentorData(data.data.user);
+        // Update secondary roles from server response
+        if (data.data.user.secondaryRoles && data.data.user.secondaryRoles.length > 0) {
+          setSecondaryRoles(data.data.user.secondaryRoles);
+          localStorage.setItem('secondaryRoles', JSON.stringify(data.data.user.secondaryRoles));
+        }
       }
     } catch (error) {
       console.error('Error fetching mentor data:', error);
@@ -85,7 +116,48 @@ const MentorDashboard = () => {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('secondaryRoles');
     navigate('/auth');
+  };
+
+  const handleRoleSwitch = (role) => {
+    if (role === 'employee') {
+      navigate('/employee-dashboard');
+    }
+    // Add other role switches as needed
+  };
+
+  const handleMigration = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/mentor/migrate-to-dual-role`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      console.log('Migration response:', data);
+      
+      if (data.success) {
+        // Update local state
+        setSecondaryRoles(data.data.secondaryRoles);
+        localStorage.setItem('secondaryRoles', JSON.stringify(data.data.secondaryRoles));
+        localStorage.setItem('userRole', data.data.primaryRole);
+        
+        // Refresh the page to show updated roles
+        window.location.reload();
+      } else {
+        console.error('Migration failed:', data.message);
+        alert('Migration failed: ' + data.message);
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      alert('Migration error: ' + error.message);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -254,6 +326,43 @@ const MentorDashboard = () => {
                         })}
                       </p>
                     </div>
+                    
+                    
+                    {/* Role Switcher for Overview */}
+                    {secondaryRoles.length > 0 && (
+                      <div className="mt-4">
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                                <User className="h-4 w-4 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-white/90 text-sm font-medium">Current Role</p>
+                                <p className="text-white text-lg font-semibold">Mentor</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white/70 text-sm">Switch to:</span>
+                              {secondaryRoles.map((role) => {
+                                const switchToRole = role === 'mentor' ? 'employee' : role;
+                                return (
+                                  <button
+                                    key={switchToRole}
+                                    onClick={() => handleRoleSwitch(switchToRole)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 text-white text-sm font-medium hover:bg-white/30 transition-all duration-200 backdrop-blur-sm border border-white/30 hover:border-white/50"
+                                  >
+                                    {switchToRole === 'employee' && <Briefcase className="h-4 w-4" />}
+                                    {switchToRole === 'mentor' && <GraduationCap className="h-4 w-4" />}
+                                    {switchToRole.charAt(0).toUpperCase() + switchToRole.slice(1)} Dashboard
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -284,6 +393,40 @@ const MentorDashboard = () => {
               
               {/* Header Actions */}
               <div className="flex items-center space-x-4">
+                {/* Role Switcher */}
+                {secondaryRoles.length > 0 && (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <GraduationCap className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-gray-600 text-sm font-medium">Current Role</p>
+                          <p className="text-gray-900 text-lg font-semibold">Mentor</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-500 text-sm">Switch to:</span>
+                        {secondaryRoles.map((role) => {
+                          const switchToRole = role === 'mentor' ? 'employee' : role;
+                          return (
+                            <button
+                              key={switchToRole}
+                              onClick={() => handleRoleSwitch(switchToRole)}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 border border-gray-200 hover:border-blue-300 shadow-sm hover:shadow-md"
+                            >
+                              {switchToRole === 'employee' && <Briefcase className="h-4 w-4" />}
+                              {switchToRole === 'mentor' && <GraduationCap className="h-4 w-4" />}
+                              {switchToRole.charAt(0).toUpperCase() + switchToRole.slice(1)} Dashboard
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="relative">
                   <button className="p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200">
                     <Bell className="w-5 h-5 text-gray-600" />

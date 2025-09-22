@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Navigate } from 'react-router-dom';
 import InternshipPostingForm from '../components/InternshipPostingForm';
+import MentorRequestForm from '../components/MentorRequestForm';
 import { employerApi } from '../utils/api';
 import {
   Users,
@@ -133,6 +134,18 @@ const EmployerDashboard = () => {
   });
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [showMentorRequestForm, setShowMentorRequestForm] = useState(false);
+  
+  // Mentor requests state
+  const [mentorRequests, setMentorRequests] = useState([]);
+  const [loadingMentorRequests, setLoadingMentorRequests] = useState(false);
+  const [mentorRequestFilters, setMentorRequestFilters] = useState({
+    status: '',
+    search: ''
+  });
+  const [selectedMentorRequest, setSelectedMentorRequest] = useState(null);
+  const [showMentorRequestModal, setShowMentorRequestModal] = useState(false);
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -320,6 +333,13 @@ const EmployerDashboard = () => {
     }
   }, [activeSection, applicationFilters]);
 
+  // Load mentor requests when mentor-requests section is active
+  useEffect(() => {
+    if (activeSection === 'mentor-requests') {
+      loadMentorRequests();
+    }
+  }, [activeSection, mentorRequestFilters]);
+
   // Load internships on component mount if user is already on internships section
   useEffect(() => {
     const userRole = localStorage.getItem('userRole');
@@ -445,6 +465,37 @@ const EmployerDashboard = () => {
       setApplications([]);
     } finally {
       setLoadingApplications(false);
+    }
+  };
+
+  // Load mentor requests with filters
+  const loadMentorRequests = async () => {
+    setLoadingMentorRequests(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Authentication required. Please log in again.');
+        setLoadingMentorRequests(false);
+        return;
+      }
+
+      const response = await employerApi.getMentorRequests(mentorRequestFilters);
+      if (response.success && response.data) {
+        const payload = response.data.success ? response.data.data : response.data;
+        const requestsArray = Array.isArray(payload?.requests) ? payload.requests : (Array.isArray(payload) ? payload : []);
+        setMentorRequests(requestsArray);
+      } else {
+        console.error('Failed to load mentor requests:', response.data?.message || response.message || 'No data received');
+        setError(`Failed to load mentor requests: ${response.data?.message || response.message || 'No data received'}`);
+        setMentorRequests([]);
+      }
+    } catch (error) {
+      console.error('Error loading mentor requests:', error);
+      setError(`Error loading mentor requests: ${error.message || 'Network error'}`);
+      setMentorRequests([]);
+    } finally {
+      setLoadingMentorRequests(false);
     }
   };
 
@@ -585,7 +636,8 @@ const EmployerDashboard = () => {
     { name: 'Dashboard', icon: Home, section: 'dashboard', current: activeSection === 'dashboard' },
     { name: 'Company Profile', icon: Building, section: 'profile', current: activeSection === 'profile' },
     { name: 'Internship Postings', icon: Plus, section: 'internships', current: activeSection === 'internships' },
-    { name: 'Applications Received', icon: FileText, section: 'applications', current: activeSection === 'applications' }
+    { name: 'Applications Received', icon: FileText, section: 'applications', current: activeSection === 'applications' },
+    { name: 'Mentor Requests', icon: UserCheck, section: 'mentor-requests', current: activeSection === 'mentor-requests' }
   ];
 
   const renderSectionContent = () => {
@@ -1288,6 +1340,210 @@ const EmployerDashboard = () => {
           </div>
         );
 
+      case 'mentor-requests':
+        const totalRequests = mentorRequests.length;
+        const pendingRequests = mentorRequests.filter(req => req.status === 'pending').length;
+        const approvedRequests = mentorRequests.filter(req => req.status === 'approved').length;
+        const rejectedRequests = mentorRequests.filter(req => req.status === 'rejected').length;
+
+        return (
+          <div className="space-y-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <UserCheck className="w-6 h-6 mr-3 text-indigo-600" />
+                  Mentor Requests
+                </h2>
+                <div className="flex items-center space-x-3">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={loadMentorRequests}
+                    disabled={loadingMentorRequests}
+                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingMentorRequests ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowMentorRequestForm(true)}
+                    className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>Submit Mentor Request</span>
+                  </motion.button>
+                </div>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <div className="flex items-start space-x-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <UserCheck className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-blue-900 mb-1">Request Employee as Mentor</h3>
+                    <p className="text-blue-700 text-sm">
+                      Submit a request to assign one of your employees as a mentor. The admin will review and approve the request.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-4 mb-6">
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-4 h-4 text-gray-500" />
+                  <select
+                    className="border rounded-lg px-3 py-2 text-sm"
+                    value={mentorRequestFilters.status}
+                    onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, status: e.target.value }))}
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Search className="w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search by employee name or email..."
+                    className="border rounded-lg px-3 py-2 text-sm w-64"
+                    value={mentorRequestFilters.search}
+                    onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, search: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-indigo-100 text-sm font-medium">Total Requests</p>
+                      <p className="text-3xl font-bold">{totalRequests}</p>
+                    </div>
+                    <FileText className="w-8 h-8 text-indigo-200" />
+                  </div>
+                </div>
+                
+                <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-yellow-100 text-sm font-medium">Pending</p>
+                      <p className="text-3xl font-bold">{pendingRequests}</p>
+                    </div>
+                    <Clock className="w-8 h-8 text-yellow-200" />
+                  </div>
+                </div>
+                
+                <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-green-100 text-sm font-medium">Approved</p>
+                      <p className="text-3xl font-bold">{approvedRequests}</p>
+                    </div>
+                    <CheckCircle className="w-8 h-8 text-green-200" />
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-red-100 text-sm font-medium">Rejected</p>
+                      <p className="text-3xl font-bold">{rejectedRequests}</p>
+                    </div>
+                    <X className="w-8 h-8 text-red-200" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Mentor Requests</h3>
+                {error && (
+                  <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>
+                )}
+                {loadingMentorRequests ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center space-x-2 text-gray-600">
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <span>Loading mentor requests...</span>
+                    </div>
+                  </div>
+                ) : mentorRequests.length === 0 ? (
+                  <div className="bg-gray-50 rounded-xl p-8 text-center">
+                    <UserCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 mb-4">No mentor requests submitted yet</p>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowMentorRequestForm(true)}
+                      className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                    >
+                      Submit Your First Request
+                    </motion.button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-600 border-b">
+                          <th className="py-3 pr-4">Employee</th>
+                          <th className="py-3 pr-4">Email</th>
+                          <th className="py-3 pr-4">Position</th>
+                          <th className="py-3 pr-4">Department</th>
+                          <th className="py-3 pr-4">Experience</th>
+                          <th className="py-3 pr-4">Status</th>
+                          <th className="py-3 pr-4">Submitted</th>
+                          <th className="py-3 pr-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mentorRequests.map(request => (
+                          <tr key={request._id} className="border-b hover:bg-gray-50">
+                            <td className="py-3 pr-4 font-medium">{request.employeeName}</td>
+                            <td className="py-3 pr-4">{request.employeeEmail}</td>
+                            <td className="py-3 pr-4">{request.employeePosition}</td>
+                            <td className="py-3 pr-4">{request.employeeDepartment}</td>
+                            <td className="py-3 pr-4">{request.yearsOfExperience}</td>
+                            <td className="py-3 pr-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-4">{new Date(request.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 pr-4">
+                              <button
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                onClick={() => {
+                                  setSelectedMentorRequest(request);
+                                  setShowMentorRequestModal(true);
+                                }}
+                              >
+                                <Eye className="h-4 w-4" /> View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -1764,6 +2020,106 @@ const EmployerDashboard = () => {
                       </motion.button>
                     </div>
                   </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mentor Request Details Modal */}
+        <AnimatePresence>
+          {showMentorRequestModal && selectedMentorRequest && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              onClick={() => setShowMentorRequestModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">Mentor Request Details</h3>
+                  <button onClick={() => setShowMentorRequestModal(false)} className="text-gray-500 hover:text-gray-700">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-sm text-gray-700">
+                  {/* Employee Information */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                      <User className="w-4 h-4 mr-2" />
+                      Employee Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <p><span className="font-semibold">Name:</span> {selectedMentorRequest.employeeName}</p>
+                      <p><span className="font-semibold">Email:</span> {selectedMentorRequest.employeeEmail}</p>
+                      <p><span className="font-semibold">Phone:</span> {selectedMentorRequest.employeePhone}</p>
+                      <p><span className="font-semibold">Position:</span> {selectedMentorRequest.employeePosition}</p>
+                      <p><span className="font-semibold">Department:</span> {selectedMentorRequest.employeeDepartment}</p>
+                      <p><span className="font-semibold">Experience:</span> {selectedMentorRequest.yearsOfExperience}</p>
+                    </div>
+                  </div>
+
+                  {/* Expertise Areas */}
+                  {selectedMentorRequest.expertise && selectedMentorRequest.expertise.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Expertise Areas</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedMentorRequest.expertise.map((skill, index) => (
+                          <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Justification */}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Justification for Mentorship</h4>
+                    <p className="bg-gray-50 rounded-lg p-3">{selectedMentorRequest.justification}</p>
+                  </div>
+
+                  {/* Request Information */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                      <Clock className="w-4 h-4 mr-2" />
+                      Request Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <p><span className="font-semibold">Submitted:</span> {new Date(selectedMentorRequest.createdAt).toLocaleDateString()}</p>
+                      <p><span className="font-semibold">Status:</span> 
+                        <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                          selectedMentorRequest.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          selectedMentorRequest.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {selectedMentorRequest.status.charAt(0).toUpperCase() + selectedMentorRequest.status.slice(1)}
+                        </span>
+                      </p>
+                      {selectedMentorRequest.reviewedAt && (
+                        <p><span className="font-semibold">Reviewed:</span> {new Date(selectedMentorRequest.reviewedAt).toLocaleDateString()}</p>
+                      )}
+                      {selectedMentorRequest.reviewedBy && (
+                        <p><span className="font-semibold">Reviewed By:</span> {selectedMentorRequest.reviewedBy.name || 'Admin'}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Admin Notes */}
+                  {selectedMentorRequest.adminNotes && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Admin Notes</h4>
+                      <p className="bg-blue-50 border border-blue-200 rounded-lg p-3">{selectedMentorRequest.adminNotes}</p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             </motion.div>
@@ -2585,6 +2941,21 @@ const EmployerDashboard = () => {
         </motion.div>
       )}
     </AnimatePresence>
+
+    {/* Mentor Request Form Modal */}
+    {showMentorRequestForm && (
+      <MentorRequestForm
+        onClose={() => setShowMentorRequestForm(false)}
+        onSuccess={(data) => {
+          setShowMentorRequestForm(false);
+          setSuccessMessage('Mentor request submitted successfully!');
+          // Refresh mentor requests if we're on the mentor-requests section
+          if (activeSection === 'mentor-requests') {
+            loadMentorRequests();
+          }
+        }}
+      />
+    )}
 
     </ErrorBoundary>
   );

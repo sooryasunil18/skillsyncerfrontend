@@ -55,6 +55,7 @@ const EmployeeDashboard = () => {
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [error, setError] = useState(null);
+  const [secondaryRoles, setSecondaryRoles] = useState([]);
 
   useEffect(() => {
     const init = () => {
@@ -63,14 +64,28 @@ const EmployeeDashboard = () => {
       const name = localStorage.getItem('userName');
       const email = localStorage.getItem('userEmail');
 
-      if (!token || role !== 'employee') {
+      if (!token) {
+        navigate('/auth');
+        return;
+      }
+      
+      // Check if user has employee role (primary or secondary)
+      const storedSecondaryRoles = localStorage.getItem('secondaryRoles');
+      const secondaryRoles = storedSecondaryRoles ? JSON.parse(storedSecondaryRoles) : [];
+      const hasEmployeeRole = role === 'employee' || secondaryRoles.includes('employee');
+      
+      
+      
+      if (!hasEmployeeRole) {
         navigate('/auth');
         return;
       }
       setUser({ name: name || 'Employee', email: email || '' });
+      setSecondaryRoles(secondaryRoles);
     };
 
     init();
+    fetchUserData(); // Fetch updated user data including secondary roles
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -89,7 +104,38 @@ const EmployeeDashboard = () => {
     localStorage.removeItem('userName');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userId');
+    localStorage.removeItem('secondaryRoles');
     navigate('/auth');
+  };
+
+  const handleRoleSwitch = (role) => {
+    if (role === 'mentor') {
+      navigate('/mentor-dashboard');
+    }
+    // Add other role switches as needed
+  };
+
+  // Fetch user data to get updated secondary roles
+  const fetchUserData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Update secondary roles from server response
+        if (data.data.user.secondaryRoles && data.data.user.secondaryRoles.length > 0) {
+          setSecondaryRoles(data.data.user.secondaryRoles);
+          localStorage.setItem('secondaryRoles', JSON.stringify(data.data.user.secondaryRoles));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
   };
 
   // Load applications from employer API (employee allowed by backend)
@@ -152,7 +198,10 @@ const EmployeeDashboard = () => {
         </div>
         <div>
           <p className="text-[11px] text-white/60">SkillSyncer</p>
-          <p className="text-sm font-semibold text-white">Employee</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-white">Employee</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">Approved</span>
+          </div>
         </div>
       </div>
       <div className="px-4"><div className="h-px w-full bg-white/10" /></div>
@@ -223,6 +272,36 @@ const EmployeeDashboard = () => {
               className="bg-transparent outline-none text-sm text-gray-700 w-48"
             />
           </div>
+          
+          {/* Role Switcher */}
+          {secondaryRoles.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Briefcase className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-gray-600 text-xs font-medium">Current Role</p>
+                  <p className="text-gray-900 text-sm font-semibold">Employee</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 text-xs">Switch to:</span>
+                  {secondaryRoles.map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => handleRoleSwitch(role)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-xs font-medium hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 border border-gray-200 hover:border-blue-300 shadow-sm hover:shadow-md"
+                    >
+                      {role === 'mentor' && <User className="h-3.5 w-3.5" />}
+                      {role === 'employee' && <Briefcase className="h-3.5 w-3.5" />}
+                      {role.charAt(0).toUpperCase() + role.slice(1)} Dashboard
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          
           <button className="relative p-2 rounded-lg hover:bg-gray-100" title="Notifications">
             <Bell className="h-5 w-5 text-gray-700" />
             <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white" />

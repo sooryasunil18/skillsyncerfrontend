@@ -86,7 +86,7 @@ const connectDB = async () => {
 connectDB();
 
 // Import routes after ensuring modules are loaded
-let authRoutes, jobseekerRoutes, adminRoutes, employerRoutes, companiesRoutes;
+let authRoutes, jobseekerRoutes, adminRoutes, employerRoutes, companiesRoutes, mentorRoutes;
 
 try {
   authRoutes = require('./routes/auth');
@@ -121,6 +121,13 @@ try {
   console.log('✅ Companies routes loaded');
 } catch (error) {
   console.error('❌ Error loading companies routes:', error.message);
+}
+
+try {
+  mentorRoutes = require('./routes/mentor');
+  console.log('✅ Mentor routes loaded');
+} catch (error) {
+  console.error('❌ Error loading mentor routes:', error.message);
 }
 
 // Routes
@@ -160,6 +167,13 @@ if (companiesRoutes) {
   console.log('⚠️  Companies routes not available');
 }
 
+if (mentorRoutes) {
+  app.use('/api/mentor', mentorRoutes);
+  console.log('✅ Mentor routes registered');
+} else {
+  console.log('⚠️  Mentor routes not available');
+}
+
 // Test route that doesn't require auth
 app.get('/api/test', (req, res) => {
   res.json({
@@ -183,7 +197,7 @@ app.use((req, res) => {
     message: 'Route not found',
     path: req.path,
     method: req.method,
-    availableRoutes: ['/api/health', '/api/test', '/api/auth/*', '/api/jobseeker/*', '/api/admin/*', '/api/employer/*']
+    availableRoutes: ['/api/health', '/api/test', '/api/auth/*', '/api/jobseeker/*', '/api/admin/*', '/api/employer/*', '/api/mentor/*']
   });
 });
 

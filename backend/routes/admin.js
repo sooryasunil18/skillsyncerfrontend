@@ -37,9 +37,10 @@ router.get('/users', [protect, adminAuth], async (req, res) => {
     // Calculate pagination
     const skip = (page - 1) * limit;
     
-    // Fetch users with pagination
+    // Fetch users with pagination and populate company info for employees
     const users = await User.find(filter)
       .select('-password')
+      .populate('employeeProfile.companyId', 'name company.name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -266,6 +267,7 @@ router.get('/stats', [protect, adminAuth], async (req, res) => {
     const jobseekers = await User.countDocuments({ role: 'jobseeker' });
     const employers = await User.countDocuments({ role: { $in: ['employer', 'company'] } });
     const mentors = await User.countDocuments({ role: 'mentor' });
+    const employees = await User.countDocuments({ role: 'employee' });
     const activeUsers = await User.countDocuments({ isActive: true });
     const verifiedUsers = await User.countDocuments({ isEmailVerified: true });
     
@@ -291,6 +293,7 @@ router.get('/stats', [protect, adminAuth], async (req, res) => {
           jobseekers,
           employers,
           mentors,
+          employees,
           activeUsers,
           verifiedUsers,
           recentRegistrations

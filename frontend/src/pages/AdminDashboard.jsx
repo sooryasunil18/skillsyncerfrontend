@@ -56,6 +56,8 @@ const AdminDashboard = () => {
   const [recentUsersLoading, setRecentUsersLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [mentors, setMentors] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [mentorRequests, setMentorRequests] = useState([]);
   const [employeeRequests, setEmployeeRequests] = useState([]);
   const [stats, setStats] = useState({});
   const [pagination, setPagination] = useState({});
@@ -71,6 +73,10 @@ const AdminDashboard = () => {
   const [showMentorForm, setShowMentorForm] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [pendingMentorRequestsCount, setPendingMentorRequestsCount] = useState(0);
+  const [pendingEmployeeRequestsCount, setPendingEmployeeRequestsCount] = useState(0);
+  const [selectedMentorRequest, setSelectedMentorRequest] = useState(null);
+  const [showMentorRequestModal, setShowMentorRequestModal] = useState(false);
   const [mentorFormData, setMentorFormData] = useState({
     name: '',
     email: '',
@@ -97,6 +103,58 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
+    }
+  };
+
+  const approveMentorRequest = async (requestId, adminNotes = '') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/mentor/admin/requests/${requestId}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ adminNotes })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage('Mentor request approved successfully!');
+        setShowSuccessPopup(true);
+        fetchMentorRequests(currentPage);
+        fetchPendingCounts();
+      } else {
+        alert(data.message || 'Error approving mentor request');
+      }
+    } catch (error) {
+      console.error('Error approving mentor request:', error);
+      alert('Error approving mentor request');
+    }
+  };
+
+  const rejectMentorRequest = async (requestId, adminNotes = '') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/mentor/admin/requests/${requestId}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ adminNotes })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage('Mentor request rejected');
+        setShowSuccessPopup(true);
+        fetchMentorRequests(currentPage);
+        fetchPendingCounts();
+      } else {
+        alert(data.message || 'Error rejecting mentor request');
+      }
+    } catch (error) {
+      console.error('Error rejecting mentor request:', error);
+      alert('Error rejecting mentor request');
     }
   };
 
@@ -177,14 +235,14 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchMentors = async (page = 1) => {
+  const fetchEmployees = async (page = 1) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       const queryParams = new URLSearchParams({
         page: page.toString(),
         limit: '10',
-        role: 'mentor'
+        role: 'employee',
       });
 
       const response = await fetch(`${API_BASE_URL}/api/admin/users?${queryParams}`, {
@@ -195,8 +253,35 @@ const AdminDashboard = () => {
       });
       const data = await response.json();
       if (data.success) {
-        setMentors(data.data.users);
-        setPagination(data.data.pagination);
+        setEmployees(data.data.users || []);
+        setPagination(data.data.pagination || {});
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMentors = async (page = 1) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10'
+      });
+
+      const response = await fetch(`${API_BASE_URL}/api/mentor/admin/mentors?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success && data.data) {
+        setMentors(data.data.mentors || []);
+        setPagination(data.data.pagination || {});
       }
     } catch (error) {
       console.error('Error fetching mentors:', error);
@@ -228,6 +313,34 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching employee requests:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMentorRequests = async (page = 1) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        ...(filters.status && { status: filters.status })
+      });
+
+      const response = await fetch(`${API_BASE_URL}/api/mentor/admin/requests?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMentorRequests(data.data.requests || []);
+        setPagination(data.data.pagination || {});
+      }
+    } catch (error) {
+      console.error('Error fetching mentor requests:', error);
     } finally {
       setLoading(false);
     }
@@ -318,14 +431,50 @@ const AdminDashboard = () => {
       const data = await response.json();
       if (data.success) {
         fetchEmployeeRequests(currentPage);
+        if (status === 'approved') {
+          fetchEmployees(currentPage);
+        }
         setSuccessMessage(`Employee request ${status} successfully!`);
         setShowSuccessPopup(true);
+        fetchPendingCounts();
       } else {
         alert(data.message || `Error ${status === 'approved' ? 'approving' : 'rejecting'} request`);
       }
     } catch (error) {
       console.error('Error updating employee request status:', error);
       alert(`Error ${status === 'approved' ? 'approving' : 'rejecting'} request`);
+    }
+  };
+
+  const fetchPendingCounts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      // Mentor Requests pending count
+      const mentorResp = await fetch(`${API_BASE_URL}/api/mentor/admin/requests?status=pending&limit=1&page=1`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const mentorData = await mentorResp.json();
+      if (mentorData.success) {
+        setPendingMentorRequestsCount(mentorData.data?.pagination?.totalRequests || 0);
+      }
+
+      // Employee Requests pending count
+      const empResp = await fetch(`${API_BASE_URL}/api/admin/employee-requests?status=pending&limit=1&page=1`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const empData = await empResp.json();
+      if (empData.success) {
+        setPendingEmployeeRequestsCount(empData.data?.pagination?.totalRequests || 0);
+      }
+    } catch (e) {
+      // Non-fatal
+      console.warn('Failed to fetch pending counts');
     }
   };
 
@@ -341,14 +490,19 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchStats();
     fetchRecentUsers(); // Always fetch recent users for dashboard
+    fetchPendingCounts();
     if (activeSection === 'users') {
       fetchUsers(currentPage);
     } else if (activeSection === 'companies') {
       fetchCompanies(currentPage);
+    } else if (activeSection === 'employees') {
+      fetchEmployees(currentPage);
     } else if (activeSection === 'mentors') {
       fetchMentors(currentPage);
     } else if (activeSection === 'employee-requests') {
       fetchEmployeeRequests(currentPage);
+    } else if (activeSection === 'mentor-requests') {
+      fetchMentorRequests(currentPage);
     }
   }, [activeSection, currentPage, filters]);
 
@@ -402,11 +556,18 @@ const AdminDashboard = () => {
   };
 
   const sidebarItems = [
+    // Overview
     { id: 'overview', name: 'Overview', icon: Home, color: 'from-blue-500 to-blue-600' },
+    // People
     { id: 'users', name: 'Users', icon: Users, color: 'from-green-500 to-green-600' },
-    { id: 'companies', name: 'Companies', icon: Building, color: 'from-purple-500 to-purple-600' },
+    { id: 'employees', name: 'Employees', icon: User, color: 'from-emerald-500 to-emerald-600' },
     { id: 'mentors', name: 'Mentors', icon: GraduationCap, color: 'from-indigo-500 to-indigo-600' },
+    // Companies
+    { id: 'companies', name: 'Companies', icon: Building, color: 'from-purple-500 to-purple-600' },
+    // Requests
+    { id: 'mentor-requests', name: 'Mentor Requests', icon: Award, color: 'from-violet-500 to-violet-600' },
     { id: 'employee-requests', name: 'Employee Requests', icon: UserCheck, color: 'from-teal-500 to-teal-600' },
+    // Other
     { id: 'jobs', name: 'Jobs', icon: Briefcase, color: 'from-orange-500 to-orange-600' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, color: 'from-pink-500 to-pink-600' },
     { id: 'settings', name: 'Settings', icon: Settings, color: 'from-gray-500 to-gray-600' }
@@ -562,6 +723,15 @@ const AdminDashboard = () => {
                 {!sidebarCollapsed && (
                   <span className={`font-medium ${isActive ? 'text-white' : ''}`}>{item.name}</span>
                 )}
+                {!sidebarCollapsed && (item.id === 'mentor-requests' || item.id === 'employee-requests') && (
+                  <span className={`ml-auto inline-flex items-center justify-center rounded-full text-xs font-semibold px-2 py-0.5 ${
+                    item.id === 'mentor-requests'
+                      ? 'bg-violet-100 text-violet-700'
+                      : 'bg-teal-100 text-teal-700'
+                  }`}>
+                    {item.id === 'mentor-requests' ? pendingMentorRequestsCount : pendingEmployeeRequestsCount}
+                  </span>
+                )}
                 {isActive && !sidebarCollapsed && (
                   <motion.div
                     initial={{ scale: 0 }}
@@ -598,7 +768,9 @@ const AdminDashboard = () => {
                 {activeSection === 'overview' && 'Dashboard Overview'}
                 {activeSection === 'users' && 'User Management'}
                 {activeSection === 'companies' && 'Company Management'}
+                {activeSection === 'employees' && 'Employees'}
                 {activeSection === 'mentors' && 'Mentor Management'}
+                {activeSection === 'mentor-requests' && 'Mentor Requests'}
                 {activeSection === 'employee-requests' && 'Employee Requests'}
                 {activeSection === 'jobs' && 'Job Management'}
                 {activeSection === 'analytics' && 'Analytics'}
@@ -839,13 +1011,13 @@ const AdminDashboard = () => {
                     description: 'Active platform users'
                   },
                   {
-                    title: 'Active Jobs',
-                    value: stats.overview?.activeJobs || 89,
+                    title: 'Employees',
+                    value: stats.overview?.employees || 0,
                     change: '+8%',
                     changeType: 'positive',
-                    icon: Briefcase,
+                    icon: User,
                     color: 'green',
-                    description: 'Open positions'
+                    description: 'Active employees'
                   },
                   {
                     title: 'Companies',
@@ -1035,6 +1207,8 @@ const AdminDashboard = () => {
                                   ? 'bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-800 shadow-indigo-100'
                                   : user.role === 'admin'
                                   ? 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 shadow-red-100'
+                                  : user.role === 'employee'
+                                  ? 'bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-800 shadow-emerald-100'
                                   : 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 shadow-blue-100'
                               }`}>
                                 {(user.role === 'employer' || user.role === 'company') ? (
@@ -1051,6 +1225,11 @@ const AdminDashboard = () => {
                                   <>
                                     <Shield className="w-3 h-3 mr-1" />
                                     Admin
+                                  </>
+                                ) : user.role === 'employee' ? (
+                                  <>
+                                    <UserCheck className="w-3 h-3 mr-1" />
+                                    Employee
                                   </>
                                 ) : (
                                   <>
@@ -1275,6 +1454,405 @@ const AdminDashboard = () => {
           </AnimatePresence>
         )}
 
+        {/* Employees Section */}
+        {activeSection === 'employees' && (
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="employees"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Employees</h3>
+                    <p className="text-sm text-gray-600 mt-1">All approved employee accounts</p>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => fetchEmployees(currentPage)}
+                    className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="font-medium">Refresh</span>
+                  </motion.button>
+                </div>
+              </motion.div>
+
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+                  </div>
+                ) : employees.length === 0 ? (
+                  <div className="text-center py-12">
+                    <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Employees</h3>
+                    <p className="text-gray-500">Approved employees will appear here after admin approval.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {employees.map((emp, index) => (
+                          <motion.tr key={emp._id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{emp.name}</div>
+                              <div className="text-sm text-gray-500">{emp.email}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {emp.employeeProfile?.companyId?.name || '—'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{emp.employeeProfile?.joinDate ? new Date(emp.employeeProfile.joinDate).toLocaleDateString() : '—'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${emp.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{emp.isActive ? 'Active' : 'Inactive'}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => updateUserStatus(emp._id, !emp.isActive)}
+                                  className={`p-2 rounded-lg transition-colors ${emp.isActive ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}
+                                  title={emp.isActive ? 'Deactivate' : 'Activate'}
+                                >
+                                  {emp.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {employees.length > 0 && pagination.totalPages > 1 && (
+                  <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={!pagination.hasPrev} className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">Previous</button>
+                      <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))} disabled={!pagination.hasNext} className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">Next</button>
+                    </div>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{((currentPage - 1) * 10) + 1}</span> to <span className="font-medium">{Math.min(currentPage * 10, pagination.totalUsers || 0)}</span> of <span className="font-medium">{pagination.totalUsers || 0}</span> results</p>
+                      </div>
+                      <div>
+                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                          <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={!pagination.hasPrev} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                          <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))} disabled={!pagination.hasNext} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
+                        </nav>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        )}
+        {/* Mentor Requests Section */}
+        {activeSection === 'mentor-requests' && (
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key="mentor-requests"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {/* Header */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Mentor Requests</h3>
+                    <p className="text-sm text-gray-600 mt-1">Review and manage mentor assignment requests</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <select
+                      className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white/50 backdrop-blur-sm transition-all duration-200"
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                    >
+                      <option value="">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => fetchMentorRequests(currentPage)}
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-violet-600 to-violet-700 text-white rounded-xl hover:from-violet-700 hover:to-violet-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="font-medium">Refresh</span>
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Table */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+                  </div>
+                ) : mentorRequests.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Mentor Requests</h3>
+                    <p className="text-gray-500">No mentor requests found matching your criteria.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white/30 divide-y divide-gray-200">
+                        {mentorRequests.map((request) => (
+                          <motion.tr key={request._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="hover:bg-white/50 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{request.employeeName}</div>
+                                <div className="text-sm text-gray-500">{request.employeeEmail}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{request.companyId?.company?.name || request.companyId?.name || 'N/A'}</div>
+                              <div className="text-sm text-gray-500">{request.companyId?.email || 'N/A'}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                request.status === 'approved'
+                                  ? 'bg-green-100 text-green-800'
+                                  : request.status === 'rejected'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(request.createdAt)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              {request.status === 'pending' ? (
+                                <div className="flex space-x-2">
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => { setSelectedMentorRequest(request); setShowMentorRequestModal(true); }}
+                                    className="flex items-center space-x-1 px-3 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    <span>View</span>
+                                  </motion.button>
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => approveMentorRequest(request._id)}
+                                    className="flex items-center space-x-1 px-3 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                    <span>Approve</span>
+                                  </motion.button>
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => {
+                                      const reason = prompt('Enter rejection reason (optional):');
+                                      rejectMentorRequest(request._id, reason || '');
+                                    }}
+                                    className="flex items-center space-x-1 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    <span>Reject</span>
+                                  </motion.button>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">
+                                  {request.status === 'approved' ? 'Approved' : 'Rejected'}
+                                  {request.reviewedAt && (
+                                    <div className="text-xs text-gray-500 mt-1">on {formatDate(request.reviewedAt)}</div>
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {mentorRequests.length > 0 && pagination.totalPages > 1 && (
+                  <div className="bg-white/50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={!pagination.hasPrev}
+                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                        disabled={!pagination.hasNext}
+                        className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Showing{' '}
+                          <span className="font-medium">{((currentPage - 1) * 10) + 1}</span>{' '}
+                          to{' '}
+                          <span className="font-medium">{Math.min(currentPage * 10, pagination.totalRequests || 0)}</span>{' '}
+                          of <span className="font-medium">{pagination.totalRequests || 0}</span> results
+                        </p>
+                      </div>
+                      <div>
+                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={!pagination.hasPrev}
+                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+                            disabled={!pagination.hasNext}
+                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                        </nav>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+
+              {/* Mentor Request Details Modal */}
+              <AnimatePresence>
+                {showMentorRequestModal && selectedMentorRequest && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.95, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.95, opacity: 0 }}
+                      className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between px-6 py-4 border-b">
+                        <h3 className="text-lg font-semibold text-gray-900">Mentor Request Details</h3>
+                        <button onClick={() => setShowMentorRequestModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                          <X className="w-5 h-5 text-gray-600" />
+                        </button>
+                      </div>
+                      <div className="p-6 space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Employee</h4>
+                            <div className="rounded-lg border p-3 text-sm text-gray-700">
+                              <p><span className="font-semibold">Name:</span> {selectedMentorRequest.employeeName}</p>
+                              <p><span className="font-semibold">Email:</span> {selectedMentorRequest.employeeEmail}</p>
+                              <p><span className="font-semibold">Phone:</span> {selectedMentorRequest.employeePhone}</p>
+                              <p><span className="font-semibold">Position:</span> {selectedMentorRequest.employeePosition}</p>
+                              <p><span className="font-semibold">Department:</span> {selectedMentorRequest.employeeDepartment}</p>
+                              <p><span className="font-semibold">Experience:</span> {selectedMentorRequest.yearsOfExperience}</p>
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Company</h4>
+                            <div className="rounded-lg border p-3 text-sm text-gray-700">
+                              <p><span className="font-semibold">Name:</span> {selectedMentorRequest.companyId?.company?.name || selectedMentorRequest.companyId?.name}</p>
+                              <p><span className="font-semibold">Email:</span> {selectedMentorRequest.companyId?.email}</p>
+                              {selectedMentorRequest.companyId?.company?.industry && (
+                                <p><span className="font-semibold">Industry:</span> {selectedMentorRequest.companyId.company.industry}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {selectedMentorRequest.expertise && selectedMentorRequest.expertise.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Expertise</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedMentorRequest.expertise.map((skill, idx) => (
+                                <span key={idx} className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700 border">{skill}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Justification</h4>
+                          <p className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 border">{selectedMentorRequest.justification}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                          <div>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              selectedMentorRequest.status === 'approved' ? 'bg-green-100 text-green-800' : selectedMentorRequest.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {selectedMentorRequest.status.charAt(0).toUpperCase() + selectedMentorRequest.status.slice(1)}
+                            </span>
+                          </div>
+                          <div className="text-xs">
+                            <span className="text-gray-500">Submitted:</span> {selectedMentorRequest.createdAt ? new Date(selectedMentorRequest.createdAt).toLocaleString() : '—'}
+                            {selectedMentorRequest.reviewedAt && (
+                              <span className="ml-3"><span className="text-gray-500">Reviewed:</span> {new Date(selectedMentorRequest.reviewedAt).toLocaleString()}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </AnimatePresence>
+        )}
         {/* Users Section */}
         {activeSection === 'users' && (
           <AnimatePresence mode="wait">

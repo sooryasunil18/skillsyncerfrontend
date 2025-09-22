@@ -193,6 +193,23 @@ export const employerApi = {
   // Dropdown data
   getInternshipTitles: (industry) => apiRequest(`/api/employer/internship-titles${industry ? `?industry=${encodeURIComponent(industry)}` : ''}`),
   getIndiaLocations: () => apiRequest('/api/employer/india-locations'),
+  
+  // Mentor request management
+  getMentorRequests: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value);
+      }
+    });
+    const url = `/api/mentor/requests${params.toString() ? `?${params.toString()}` : ''}`;
+    return apiRequest(url);
+  },
+  
+  submitMentorRequest: (requestData) => apiRequest('/api/mentor/request', {
+    method: 'POST',
+    body: JSON.stringify(requestData),
+  }),
 };
 
 export const healthCheck = () => apiRequest('/api/health');
