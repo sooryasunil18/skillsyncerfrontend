@@ -135,6 +135,8 @@ const EmployerDashboard = () => {
   });
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusUpdateData, setStatusUpdateData] = useState({ applicationId: null, newStatus: '', notes: '' });
   const [showMentorRequestForm, setShowMentorRequestForm] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -148,6 +150,8 @@ const EmployerDashboard = () => {
   });
   const [selectedMentorRequest, setSelectedMentorRequest] = useState(null);
   const [showMentorRequestModal, setShowMentorRequestModal] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = React.useRef(null);
   
   const navigate = useNavigate();
 
@@ -305,6 +309,36 @@ const EmployerDashboard = () => {
           ]
         });
 
+        // Fetch real recent applications for the dashboard overview
+        try {
+          const appsResponse = await employerApi.getDetailedApplications({ page: 1, limit: 5 });
+          const payload = appsResponse?.data?.success ? appsResponse.data.data : appsResponse.data;
+          const applicationsArray = Array.isArray(payload?.applications) ? payload.applications : (Array.isArray(payload) ? payload : []);
+          if (Array.isArray(applicationsArray) && applicationsArray.length > 0) {
+            const recent = applicationsArray.slice(0, 4).map(app => ({
+              id: app._id,
+              candidateName: app.personalDetails?.fullName || app?.jobseeker?.name || 'Candidate',
+              position: app.internshipDetails?.title || app?.internship?.title || 'Internship',
+              appliedDate: app.appliedAt ? new Date(app.appliedAt).toISOString().slice(0, 10) : '',
+              status: app.status || 'pending',
+              experience: typeof app.workExperience?.totalYearsExperience === 'number' ? `${app.workExperience.totalYearsExperience}+ years` : '',
+              skills: Array.isArray(app.skills?.technicalSkills) ? app.skills.technicalSkills.slice(0, 3) : [],
+              location: app.internshipId?.location || app.internshipDetails?.location || '',
+              avatar: '👤'
+            }));
+            setDashboardData(prev => ({
+              ...(prev || {}),
+              recentApplications: recent,
+              stats: {
+                ...(prev?.stats || {}),
+                totalApplications: (payload?.pagination?.totalItems) || applicationsArray.length || 0,
+              }
+            }));
+          }
+        } catch (e) {
+          console.log('Failed to load recent applications for dashboard:', e.message);
+        }
+
         // Update time every minute
         const timeInterval = setInterval(() => {
           setCurrentTime(new Date());
@@ -321,6 +355,19 @@ const EmployerDashboard = () => {
 
     initializeDashboard();
   }, [navigate]);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isProfileMenuOpen]);
 
   const loadEmployees = async () => {
     try {
@@ -479,7 +526,18 @@ const EmployerDashboard = () => {
             totalApplications: (payload?.pagination?.totalItems) || applicationsArray.length || 0,
             shortlistedCount: shortlisted,
             rejectedCount: rejected,
-          }
+          },
+          recentApplications: applicationsArray.slice(0, 4).map(app => ({
+            id: app._id,
+            candidateName: app.personalDetails?.fullName || app?.jobseeker?.name || 'Candidate',
+            position: app.internshipDetails?.title || app?.internship?.title || 'Internship',
+            appliedDate: app.appliedAt ? new Date(app.appliedAt).toISOString().slice(0, 10) : '',
+            status: app.status || 'pending',
+            experience: typeof app.workExperience?.totalYearsExperience === 'number' ? `${app.workExperience.totalYearsExperience}+ years` : '',
+            skills: Array.isArray(app.skills?.technicalSkills) ? app.skills.technicalSkills.slice(0, 3) : [],
+            location: app.internshipId?.location || app.internshipDetails?.location || '',
+            avatar: '👤'
+          }))
         }));
       } else {
         console.error('Failed to load applications:', response.data?.message || response.message || 'No data received');
@@ -543,6 +601,19 @@ const EmployerDashboard = () => {
       setError(`Error updating application: ${error.message}`);
       setTimeout(() => setError(null), 5000);
     }
+  };
+
+  // Handle status update with modal
+  const handleStatusUpdate = (applicationId, newStatus) => {
+    setStatusUpdateData({ applicationId, newStatus, notes: '' });
+    setShowStatusModal(true);
+  };
+
+  // Confirm status update
+  const confirmStatusUpdate = async () => {
+    await updateApplicationStatus(statusUpdateData.applicationId, statusUpdateData.newStatus, statusUpdateData.notes);
+    setShowStatusModal(false);
+    setStatusUpdateData({ applicationId: null, newStatus: '', notes: '' });
   };
 
   // View full application details
@@ -679,7 +750,7 @@ const EmployerDashboard = () => {
               className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
             >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
                   <Users className="w-6 h-6 mr-3 text-blue-600" />
                   Employees
                 </h2>
@@ -710,27 +781,23 @@ const EmployerDashboard = () => {
                   <p className="text-gray-600">Approved employee requests will appear here.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
+                <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
+                  <table className="min-w-full text-sm divide-y divide-gray-200">
                     <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <tr className="text-left text-gray-600">
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Name</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Joined</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="divide-y divide-gray-100">
                       {employees.map((emp) => (
-                        <tr key={emp._id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{emp.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.email}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.employeeProfile?.department || '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.employeeProfile?.position || '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.createdAt ? new Date(emp.createdAt).toLocaleDateString() : '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                        <tr key={emp._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-3 whitespace-nowrap text-gray-900 font-medium">{emp.name}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{emp.email}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{emp.createdAt ? new Date(emp.createdAt).toLocaleDateString() : '-'}</td>
+                          <td className="px-6 py-3 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${emp.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {emp.isActive ? 'Active' : 'Inactive'}
                             </span>
@@ -760,7 +827,7 @@ const EmployerDashboard = () => {
                 className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center">
                     <Plus className="w-6 h-6 mr-3 text-blue-600" />
                     Manage Internship Postings
                   </h2>
@@ -979,7 +1046,7 @@ const EmployerDashboard = () => {
               animate={{ opacity: 1, y: 0 }}
               className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                 <Plus className="w-6 h-6 mr-3 text-blue-600" />
                 Post New Job
               </h2>
@@ -1108,7 +1175,7 @@ const EmployerDashboard = () => {
               className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
                   <Briefcase className="w-6 h-6 mr-3 text-blue-600" />
                   Manage Internships
                 </h2>
@@ -1186,7 +1253,7 @@ const EmployerDashboard = () => {
               className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
                   <FileText className="w-6 h-6 mr-3 text-blue-600" />
                   Internship Applications
                 </h2>
@@ -1215,10 +1282,9 @@ const EmployerDashboard = () => {
                   >
                     <option value="">All Statuses</option>
                     <option value="pending">Pending</option>
-                    <option value="reviewed">Reviewed</option>
                     <option value="shortlisted">Shortlisted</option>
+                    <option value="accepted">Selected</option>
                     <option value="rejected">Rejected</option>
-                    <option value="hired">Hired</option>
                   </select>
                 </div>
                 <div>
@@ -1260,83 +1326,88 @@ const EmployerDashboard = () => {
                   <p className="text-gray-600">Applications for your internships will appear here.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {applications.map((application, index) => (
-                    <motion.div
-                      key={application._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              {application.personalDetails?.fullName || 'N/A'}
-                            </h3>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              application.status === 'hired' ? 'bg-green-100 text-green-800' :
+                <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
+                  <table className="min-w-full text-sm divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-gray-600">
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Candidate</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Internship</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Applied</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Experience</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {applications.map((application) => (
+                        <tr key={application._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-3 whitespace-nowrap font-medium text-gray-900">{application.personalDetails?.fullName || 'N/A'}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{application.personalDetails?.emailAddress || 'N/A'}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-blue-600">{application.internshipDetails?.title || 'Internship'}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{new Date(application.createdAt).toLocaleDateString()}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{
+                            (application.workExperience?.totalYearsExperience ?? 0) <= 0
+                              ? 'Fresher'
+                              : `${application.workExperience.totalYearsExperience} yrs`
+                          }</td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              application.status === 'accepted' ? 'bg-green-100 text-green-800' :
                               application.status === 'shortlisted' ? 'bg-blue-100 text-blue-800' :
-                              application.status === 'reviewed' ? 'bg-yellow-100 text-yellow-800' :
                               application.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
                               {application.status || 'pending'}
                             </span>
-                          </div>
-                          <p className="text-blue-600 font-medium mb-1">
-                            {application.internshipDetails?.title || 'Internship'}
-                          </p>
-                          <p className="text-sm text-gray-600 mb-2">
-                            {application.personalDetails?.emailAddress || 'N/A'}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Applied on {new Date(application.createdAt).toLocaleDateString()}
-                          </p>
-                          <div className="mt-3">
-                            <p className="text-sm text-gray-700">
-                              <strong>Education:</strong> {application.educationDetails?.highestQualification || 'N/A'} 
-                              from {application.educationDetails?.institutionName || 'N/A'}
-                            </p>
-                            <p className="text-sm text-gray-700 mt-1">
-                              <strong>Experience:</strong> {application.workExperience?.totalYearsExperience || 0} years
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col space-y-2 ml-4">
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                            onClick={() => viewApplicationDetails(application._id)}
-                          >
-                            <Eye className="w-4 h-4 inline mr-1" />
-                            View Details
-                          </motion.button>
-                          {application.status === 'pending' && (
-                            <>
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                                onClick={() => updateApplicationStatus(application._id, 'shortlisted')}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                onClick={() => viewApplicationDetails(application._id)}
                               >
-                                <CheckCircle className="w-4 h-4 inline mr-1" />
-                                Shortlist
-                              </motion.button>
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
-                                onClick={() => updateApplicationStatus(application._id, 'rejected')}
-                              >
-                                <X className="w-4 h-4 inline mr-1" />
-                                Reject
-                              </motion.button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                                <Eye className="h-4 w-4" /> View
+                              </button>
+                              {application.status === 'pending' && (
+                                <>
+                                  <button
+                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                    onClick={() => handleStatusUpdate(application._id, 'shortlisted')}
+                                  >
+                                    <CheckCircle className="h-4 w-4" /> Shortlist
+                                  </button>
+                                  <button
+                                    className="inline-flex items-center gap-1 text-red-600 hover:underline"
+                                    onClick={() => handleStatusUpdate(application._id, 'rejected')}
+                                  >
+                                    <X className="h-4 w-4" /> Reject
+                                  </button>
+                                </>
+                              )}
+                              {application.status === 'shortlisted' && (
+                                <>
+                                  <button
+                                    className="inline-flex items-center gap-1 text-green-600 hover:underline"
+                                    onClick={() => handleStatusUpdate(application._id, 'accepted')}
+                                  >
+                                    <Award className="h-4 w-4" /> Select
+                                  </button>
+                                  <button
+                                    className="inline-flex items-center gap-1 text-red-600 hover:underline"
+                                    onClick={() => handleStatusUpdate(application._id, 'rejected')}
+                                  >
+                                    <X className="h-4 w-4" /> Reject
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </motion.div>
@@ -1459,6 +1530,12 @@ const EmployerDashboard = () => {
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                   <UserCheck className="w-6 h-6 mr-3 text-indigo-600" />
                   Mentor Requests
+                  <span className="ml-3 inline-flex items-center gap-2">
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700">{totalRequests} total</span>
+                    {pendingRequests > 0 && (
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-800">{pendingRequests} pending</span>
+                    )}
+                  </span>
                 </h2>
                 <div className="flex items-center space-x-3">
                   <motion.button
@@ -1466,7 +1543,7 @@ const EmployerDashboard = () => {
                     whileTap={{ scale: 0.95 }}
                     onClick={loadMentorRequests}
                     disabled={loadingMentorRequests}
-                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    className="bg-white text-gray-700 px-4 py-2 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 shadow-sm"
                   >
                     <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingMentorRequests ? 'animate-spin' : ''}`} />
                     Refresh
@@ -1475,7 +1552,7 @@ const EmployerDashboard = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setShowMentorRequestForm(true)}
-                    className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2"
+                    className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     <Plus className="w-5 h-5" />
                     <span>Submit Mentor Request</span>
@@ -1502,7 +1579,7 @@ const EmployerDashboard = () => {
                 <div className="flex items-center space-x-2">
                   <Filter className="w-4 h-4 text-gray-500" />
                   <select
-                    className="border rounded-lg px-3 py-2 text-sm"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     value={mentorRequestFilters.status}
                     onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, status: e.target.value }))}
                   >
@@ -1513,14 +1590,16 @@ const EmployerDashboard = () => {
                   </select>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Search className="w-4 h-4 text-gray-500" />
-                  <input
-                    type="text"
-                    placeholder="Search by employee name or email..."
-                    className="border rounded-lg px-3 py-2 text-sm w-64"
-                    value={mentorRequestFilters.search}
-                    onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, search: e.target.value }))}
-                  />
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search by employee name or email..."
+                      className="border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm w-64 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-400"
+                      value={mentorRequestFilters.search}
+                      onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, search: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1572,49 +1651,46 @@ const EmployerDashboard = () => {
                   <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>
                 )}
                 {loadingMentorRequests ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-10">
                     <div className="inline-flex items-center space-x-2 text-gray-600">
                       <RefreshCw className="w-5 h-5 animate-spin" />
                       <span>Loading mentor requests...</span>
                     </div>
                   </div>
                 ) : mentorRequests.length === 0 ? (
-                  <div className="bg-gray-50 rounded-xl p-8 text-center">
+                  <div className="bg-gray-50 rounded-xl p-10 text-center border border-dashed border-gray-200">
                     <UserCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-4">No mentor requests submitted yet</p>
+                    <p className="text-gray-600 mb-1 font-medium">No mentor requests submitted yet</p>
+                    <p className="text-gray-500 mb-4 text-sm">Create your first request to get started.</p>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => setShowMentorRequestForm(true)}
-                      className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                      className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                       Submit Your First Request
                     </motion.button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-600 border-b">
-                          <th className="py-3 pr-4">Employee</th>
-                          <th className="py-3 pr-4">Email</th>
-                          <th className="py-3 pr-4">Position</th>
-                          <th className="py-3 pr-4">Department</th>
-                          <th className="py-3 pr-4">Experience</th>
-                          <th className="py-3 pr-4">Status</th>
-                          <th className="py-3 pr-4">Submitted</th>
-                          <th className="py-3 pr-4">Actions</th>
+                  <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
+                    <table className="min-w-full text-sm divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr className="text-left text-gray-600">
+                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Employee</th>
+                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Email</th>
+                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Experience</th>
+                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Status</th>
+                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Submitted</th>
+                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-gray-100">
                         {mentorRequests.map(request => (
-                          <tr key={request._id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 pr-4 font-medium">{request.employeeName}</td>
-                            <td className="py-3 pr-4">{request.employeeEmail}</td>
-                            <td className="py-3 pr-4">{request.employeePosition}</td>
-                            <td className="py-3 pr-4">{request.employeeDepartment}</td>
-                            <td className="py-3 pr-4">{request.yearsOfExperience}</td>
-                            <td className="py-3 pr-4">
+                          <tr key={request._id} className="hover:bg-gray-50">
+                            <td className="py-3 pr-4 font-medium whitespace-nowrap">{request.employeeName}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">{request.employeeEmail}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">{request.yearsOfExperience}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                 request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                                 request.status === 'approved' ? 'bg-green-100 text-green-800' :
@@ -1623,8 +1699,8 @@ const EmployerDashboard = () => {
                                 {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                               </span>
                             </td>
-                            <td className="py-3 pr-4">{new Date(request.createdAt).toLocaleDateString()}</td>
-                            <td className="py-3 pr-4">
+                            <td className="py-3 pr-4 whitespace-nowrap">{new Date(request.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">
                               <button
                                 className="inline-flex items-center gap-1 text-blue-600 hover:underline"
                                 onClick={() => {
@@ -1673,16 +1749,10 @@ const EmployerDashboard = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden">
-      {/* Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-purple-600/20 rounded-full blur-3xl"></div>
-        <div className="absolute top-40 -left-32 w-64 h-64 bg-gradient-to-br from-indigo-400/20 to-pink-600/20 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-40 right-20 w-48 h-48 bg-gradient-to-br from-emerald-400/20 to-teal-600/20 rounded-full blur-3xl"></div>
-      </div>
+      <div className="min-h-screen bg-gray-50 relative">
       {/* Enhanced Header */}
-      <div className="bg-white/90 backdrop-blur-md shadow-xl border-b border-blue-100 lg:ml-64">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
+      <div className="bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-200 lg:ml-56 relative">
+        <div className="px-3 sm:px-5 lg:px-6 py-3 lg:py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 lg:space-x-6">
               <motion.button
@@ -1695,12 +1765,14 @@ const EmployerDashboard = () => {
               </motion.button>
 
               <div className="flex items-center space-x-3 lg:space-x-4">
-                <div className="h-10 w-10 lg:h-14 lg:w-14 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg">
-                  <Building className="h-5 w-5 lg:h-7 lg:w-7 text-white" />
+                <div className="h-10 w-10 lg:h-14 lg:w-14 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow">
+                  <span className="inline-flex items-center justify-center h-10 w-10 lg:h-14 lg:w-14 rounded-full bg-white/10 ring-2 ring-white/20">
+                    <Building className="h-5 w-5 lg:h-7 lg:w-7 text-white" />
+                  </span>
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-                    {getGreeting()}, <span className="text-blue-600">{user?.name?.split(' ')[0] || localStorage.getItem('userName')?.split(' ')[0] || 'Company'}!</span> <span className="hidden sm:inline">🏢</span>
+                  <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 tracking-tight">
+                    {getGreeting()}, <span className="text-blue-700">{user?.name?.split(' ')[0] || localStorage.getItem('userName')?.split(' ')[0] || 'Company'}</span>
                   </h1>
                   <p className="text-gray-600 text-xs sm:text-sm">
                     {formatDate(currentTime)} • {formatTime(currentTime)}
@@ -1710,23 +1782,17 @@ const EmployerDashboard = () => {
             </div>
             
             <div className="flex items-center space-x-2 lg:space-x-3">
-              <div className="hidden md:block text-right mr-2 lg:mr-4">
-                <p className="text-sm font-medium text-gray-900">
-                  Welcome back, <span className="text-blue-600">{user?.name?.split(' ')[0] || 'Company'}</span>!
-                </p>
-                <p className="text-xs text-gray-600">
-                  {activeSection === 'dashboard' ? 'Dashboard Overview' :
-                   activeSection === 'internships' ? 'Manage Internship Postings' :
-                   activeSection === 'post-job' ? 'Post New Job' :
-                   activeSection === 'applications' ? 'Applications Received' :
-                   activeSection === 'profile' ? 'Company Profile' : 'Dashboard'}
-                </p>
+              <div className="hidden sm:flex items-center mr-2">
+                <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs font-medium">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  System Online
+                </span>
               </div>
 
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors bg-white rounded-lg shadow-sm"
+                className="relative p-2 text-gray-600 hover:text-blue-700 transition-colors bg-white rounded-lg border border-gray-200 shadow-sm"
                 title="Notifications"
               >
                 <Bell className="w-4 h-4 lg:w-5 lg:h-5" />
@@ -1736,12 +1802,60 @@ const EmployerDashboard = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="p-2 text-gray-600 hover:text-green-600 transition-colors"
+                className="p-2 text-gray-600 hover:text-green-700 transition-colors bg-white rounded-lg border border-gray-200 shadow-sm"
                 title="Refresh Dashboard"
                 onClick={() => window.location.reload()}
               >
                 <Activity className="w-5 h-5" />
               </motion.button>
+
+              {/* Profile avatar with dropdown */}
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">
+                  Welcome back, <span className="text-blue-700">{user?.name?.split(' ')[0] || 'Company'}</span>
+                </p>
+                <p className="text-xs text-gray-600">
+                  {activeSection === 'dashboard' ? 'Dashboard Overview' :
+                   activeSection === 'internships' ? 'Manage Internship Postings' :
+                   activeSection === 'post-job' ? 'Post New Job' :
+                   activeSection === 'applications' ? 'Applications Received' :
+                   activeSection === 'profile' ? 'Company Profile' : 'Dashboard'}
+                </p>
+                </div>
+              <div className="relative" ref={profileMenuRef}>
+                <button
+                  onClick={() => setIsProfileMenuOpen(prev => !prev)}
+                  className="h-9 w-9 lg:h-10 lg:w-10 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-center ring-2 ring-white shadow hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  title="Profile"
+                >
+                  <span className="text-sm font-semibold">
+                    {(user?.name || localStorage.getItem('userName') || 'C').slice(0,1).toUpperCase()}
+                  </span>
+                </button>
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50">
+                    <button
+                      onClick={() => { setIsProfileMenuOpen(false); setActiveSection('profile'); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Profile
+                    </button>
+                    <button
+                      onClick={() => { setIsProfileMenuOpen(false); navigate('/settings'); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Settings
+                    </button>
+                    <button
+                      onClick={() => { setIsProfileMenuOpen(false); handleLogout(); }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+              
             </div>
           </div>
         </div>
@@ -1761,33 +1875,22 @@ const EmployerDashboard = () => {
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-xl z-40 hidden lg:block border-r border-gray-200">
+      <div className="fixed inset-y-0 left-0 w-56 bg-white shadow-sm z-40 hidden lg:block border-r border-gray-200">
         <div className="flex flex-col h-full">
           {/* Logo Section */}
-          <div className="flex items-center justify-center h-20 px-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-purple-600">
+          <div className="flex items-center justify-center h-20 px-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
             <div className="flex items-center space-x-3">
               <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center">
                 <Building className="h-6 w-6 text-white" />
               </div>
               <div>
                 <span className="text-xl font-bold text-white">SkillSyncer</span>
-                <p className="text-xs text-blue-100">Employer Portal</p>
+                <p className="text-xs text-indigo-100">Employer Portal</p>
               </div>
             </div>
           </div>
 
-          {/* User Info */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="h-12 w-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <User className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{user?.name || localStorage.getItem('userName') || 'Company'}</h3>
-                <p className="text-sm text-gray-600">{user?.email || localStorage.getItem('userEmail') || 'company@example.com'}</p>
-              </div>
-            </div>
-          </div>
+          {/* User Info removed per request */}
 
           {/* Desktop Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
@@ -1837,7 +1940,7 @@ const EmployerDashboard = () => {
       <motion.div
         initial={false}
         animate={{ x: isSidePanelOpen ? 0 : '-100%' }}
-        className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl border-r border-gray-200 lg:hidden"
+        className="fixed inset-y-0 left-0 z-50 w-56 bg-white shadow-2xl border-r border-gray-200 lg:hidden"
       >
         <div className="flex flex-col h-full">
           {/* Mobile Header */}
@@ -1858,18 +1961,7 @@ const EmployerDashboard = () => {
             </motion.button>
           </div>
 
-          {/* Mobile User Info */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="h-12 w-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <User className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">{user?.name || localStorage.getItem('userName') || 'Company'}</h3>
-                <p className="text-sm text-gray-600">{user?.email || localStorage.getItem('userEmail') || 'company@example.com'}</p>
-              </div>
-            </div>
-          </div>
+          {/* Mobile User Info removed per request */}
 
           {/* Mobile Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
@@ -1922,7 +2014,7 @@ const EmployerDashboard = () => {
       </motion.div>
 
       {/* Quick Navigation Bar - Mobile/Tablet */}
-      <div className="lg:ml-64 bg-white/80 backdrop-blur-sm border-b border-gray-200 lg:hidden">
+      <div className="lg:ml-56 bg-white/80 backdrop-blur-sm border-b border-gray-200 lg:hidden">
         <div className="px-4 py-3">
           <div className="flex space-x-1 overflow-x-auto">
             {navigationItems.map((item) => (
@@ -1948,7 +2040,7 @@ const EmployerDashboard = () => {
         </div>
       </div>
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8">
+      <div className="lg:ml-56 max-w-7xl mx-auto px-3 sm:px-5 lg:px-6 py-3 lg:py-6">
         {/* Breadcrumb Navigation */}
         {activeSection !== 'dashboard' && (
           <motion.div
@@ -1986,24 +2078,30 @@ const EmployerDashboard = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
               onClick={() => setShowApplicationModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6"
+                className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between mb-4">
+                {/* Sticky Header */}
+                <div className="sticky top-0 z-10 bg-white rounded-t-2xl border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                   <h3 className="text-xl font-bold text-gray-900">Application Details</h3>
-                  <button onClick={() => setShowApplicationModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <button
+                    onClick={() => setShowApplicationModal(false)}
+                    className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100"
+                    aria-label="Close"
+                  >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="space-y-3 text-sm text-gray-700">
+                {/* Modal Body */}
+                <div className="px-6 py-4 space-y-3 text-sm text-gray-700">
                   <p>
                     <span className="font-semibold">Candidate:</span> {selectedApplication.personalDetails?.fullName || 'N/A'}
                   </p>
@@ -2048,7 +2146,11 @@ const EmployerDashboard = () => {
                   <div className="mt-4">
                     <h4 className="font-semibold text-gray-900 mb-2">Work Experience</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <p><span className="font-semibold">Total Years:</span> {selectedApplication.workExperience?.totalYearsExperience ?? '—'}</p>
+                    <p><span className="font-semibold">Total Years:</span> {(() => {
+                      const yrs = selectedApplication.workExperience?.totalYearsExperience;
+                      if (yrs === null || yrs === undefined) return '—';
+                      return yrs <= 0 ? 'Fresher' : `${yrs} years`;
+                    })()}</p>
                       <p><span className="font-semibold">Company:</span> {selectedApplication.workExperience?.currentLastCompany || '—'}</p>
                       <p><span className="font-semibold">Designation:</span> {selectedApplication.workExperience?.currentLastDesignation || '—'}</p>
                     </div>
@@ -2105,22 +2207,33 @@ const EmployerDashboard = () => {
 
                   <div className="mt-6 flex justify-between items-center">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      selectedApplication.status === 'hired' ? 'bg-green-100 text-green-800' :
+                      selectedApplication.status === 'accepted' ? 'bg-green-100 text-green-800' :
                       selectedApplication.status === 'shortlisted' ? 'bg-blue-100 text-blue-800' :
-                      selectedApplication.status === 'reviewed' ? 'bg-yellow-100 text-yellow-800' :
                       selectedApplication.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      selectedApplication.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
                       {selectedApplication.status || 'pending'}
                     </span>
-                    <div className="flex items-center space-x-2">
-                      <motion.button whileHover={{ scale: 1.05 }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors" onClick={() => { updateApplicationStatus(selectedApplication._id, 'shortlisted'); setShowApplicationModal(false); }}>
-                        <CheckCircle className="w-4 h-4 inline mr-1" /> Shortlist
-                      </motion.button>
-                      <motion.button whileHover={{ scale: 1.05 }} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors" onClick={() => { updateApplicationStatus(selectedApplication._id, 'rejected'); setShowApplicationModal(false); }}>
-                        <X className="w-4 h-4 inline mr-1" /> Reject
-                      </motion.button>
-                    </div>
+                    {selectedApplication.status === 'pending' || selectedApplication.status === 'shortlisted' ? (
+                      <div className="flex items-center space-x-2">
+                        {selectedApplication.status === 'pending' && (
+                          <motion.button whileHover={{ scale: 1.05 }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors" onClick={() => { handleStatusUpdate(selectedApplication._id, 'shortlisted'); }}>
+                            <CheckCircle className="w-4 h-4 inline mr-1" /> Shortlist
+                          </motion.button>
+                        )}
+                        {selectedApplication.status === 'shortlisted' && (
+                          <motion.button whileHover={{ scale: 1.05 }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors" onClick={() => { handleStatusUpdate(selectedApplication._id, 'accepted'); }}>
+                            <Award className="w-4 h-4 inline mr-1" /> Select
+                          </motion.button>
+                        )}
+                        {(selectedApplication.status === 'pending' || selectedApplication.status === 'shortlisted') && (
+                          <motion.button whileHover={{ scale: 1.05 }} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors" onClick={() => { handleStatusUpdate(selectedApplication._id, 'rejected'); }}>
+                            <X className="w-4 h-4 inline mr-1" /> Reject
+                          </motion.button>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </motion.div>
@@ -2135,26 +2248,26 @@ const EmployerDashboard = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
               onClick={() => setShowMentorRequestModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6"
+                className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-gray-100"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold text-gray-900">Mentor Request Details</h3>
-                  <button onClick={() => setShowMentorRequestModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <button onClick={() => setShowMentorRequestModal(false)} className="text-gray-500 hover:text-gray-700 rounded-full p-1 hover:bg-gray-100">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
                 <div className="space-y-4 text-sm text-gray-700">
                   {/* Employee Information */}
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
                       <User className="w-4 h-4 mr-2" />
                       Employee Information
@@ -2163,8 +2276,7 @@ const EmployerDashboard = () => {
                       <p><span className="font-semibold">Name:</span> {selectedMentorRequest.employeeName}</p>
                       <p><span className="font-semibold">Email:</span> {selectedMentorRequest.employeeEmail}</p>
                       <p><span className="font-semibold">Phone:</span> {selectedMentorRequest.employeePhone}</p>
-                      <p><span className="font-semibold">Position:</span> {selectedMentorRequest.employeePosition}</p>
-                      <p><span className="font-semibold">Department:</span> {selectedMentorRequest.employeeDepartment}</p>
+                    {/* Position and Department hidden per request */}
                       <p><span className="font-semibold">Experience:</span> {selectedMentorRequest.yearsOfExperience}</p>
                     </div>
                   </div>
@@ -2186,11 +2298,11 @@ const EmployerDashboard = () => {
                   {/* Justification */}
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-2">Justification for Mentorship</h4>
-                    <p className="bg-gray-50 rounded-lg p-3">{selectedMentorRequest.justification}</p>
+                    <p className="bg-gray-50 rounded-lg p-3 border border-gray-100">{selectedMentorRequest.justification}</p>
                   </div>
 
                   {/* Request Information */}
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
                       <Clock className="w-4 h-4 mr-2" />
                       Request Information
@@ -2232,7 +2344,7 @@ const EmployerDashboard = () => {
           <>
             {/* Dashboard Section Header */}
             <div className="mb-8">
-              <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-xl lg:text-2xl font-bold text-gray-900 mb-1">
                 Dashboard Overview
               </h2>
               <p className="text-gray-600">
@@ -2246,16 +2358,16 @@ const EmployerDashboard = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ y: -5 }}
-                className="relative bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl lg:rounded-3xl shadow-xl border border-blue-100 p-4 lg:p-6 hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                className="relative bg-white rounded-2xl lg:rounded-3xl shadow-sm border border-gray-200 p-4 lg:p-6 hover:shadow-md transition-all duration-200 overflow-hidden"
               >
-                <div className="absolute top-0 right-0 w-16 h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-full -mr-8 lg:-mr-10 -mt-8 lg:-mt-10"></div>
+                <div className="absolute top-0 right-0 w-16 h-16 lg:w-20 lg:h-20 bg-blue-50 rounded-full -mr-8 lg:-mr-10 -mt-8 lg:-mt-10"></div>
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3 lg:mb-4">
-                    <div className="h-10 w-10 lg:h-14 lg:w-14 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg">
-                      <Briefcase className="h-5 w-5 lg:h-7 lg:w-7 text-white" />
+                    <div className="h-10 w-10 lg:h-14 lg:w-14 rounded-xl lg:rounded-2xl flex items-center justify-center bg-blue-50 border border-blue-100">
+                      <Briefcase className="h-5 w-5 lg:h-7 lg:w-7 text-blue-600" />
                     </div>
                     <div className="text-right">
-                      <div className="flex items-center text-xs lg:text-sm text-blue-600 font-medium mb-1">
+                      <div className="flex items-center text-xs lg:text-sm text-blue-700 font-medium mb-1">
                         <ArrowUpRight className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
                         +12%
                       </div>
@@ -2264,11 +2376,11 @@ const EmployerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-xs lg:text-sm font-medium text-gray-600 mb-1">Active Internships</p>
-                    <p className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                    <p className="text-xl lg:text-2xl font-bold text-gray-900 mb-1">
                       {dashboardData?.stats?.activeInternships || 0}
                     </p>
-                    <div className="w-full bg-blue-200 rounded-full h-1.5 lg:h-2">
-                      <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-1.5 lg:h-2 rounded-full" style={{ width: '75%' }}></div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 lg:h-2">
+                      <div className="bg-blue-600 h-1.5 lg:h-2 rounded-full" style={{ width: '75%' }}></div>
                     </div>
                   </div>
                 </div>
@@ -2279,16 +2391,16 @@ const EmployerDashboard = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
                 whileHover={{ y: -5 }}
-                className="relative bg-gradient-to-br from-green-50 to-emerald-100 rounded-3xl shadow-xl border border-green-100 p-6 hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                className="relative bg-white rounded-3xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 overflow-hidden"
               >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full -mr-10 -mt-10"></div>
+                <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full -mr-10 -mt-10"></div>
                 <div className="relative">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="h-14 w-14 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Users className="h-7 w-7 text-white" />
+                    <div className="h-14 w-14 rounded-2xl flex items-center justify-center bg-emerald-50 border border-emerald-100">
+                      <Users className="h-7 w-7 text-emerald-600" />
                     </div>
                     <div className="text-right">
-                      <div className="flex items-center text-sm text-green-600 font-medium mb-1">
+                      <div className="flex items-center text-sm text-emerald-700 font-medium mb-1">
                         <ArrowUpRight className="h-4 w-4 mr-1" />
                         +24%
                       </div>
@@ -2297,11 +2409,11 @@ const EmployerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Total Applications</p>
-                    <p className="text-3xl font-bold text-gray-900 mb-2">
+                    <p className="text-2xl font-bold text-gray-900 mb-1">
                       {dashboardData?.stats?.totalApplications || 0}
                     </p>
-                    <div className="w-full bg-green-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" style={{ width: '85%' }}></div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-emerald-600 h-2 rounded-full" style={{ width: '85%' }}></div>
                     </div>
                   </div>
                 </div>
@@ -2312,16 +2424,16 @@ const EmployerDashboard = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 whileHover={{ y: -5 }}
-                className="relative bg-gradient-to-br from-orange-50 to-red-100 rounded-3xl shadow-xl border border-orange-100 p-6 hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                className="relative bg-white rounded-3xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 overflow-hidden"
               >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-full -mr-10 -mt-10"></div>
+                <div className="absolute top-0 right-0 w-20 h-20 bg-orange-50 rounded-full -mr-10 -mt-10"></div>
                 <div className="relative">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="h-14 w-14 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Calendar className="h-7 w-7 text-white" />
+                    <div className="h-14 w-14 rounded-2xl flex items-center justify-center bg-orange-50 border border-orange-100">
+                      <Calendar className="h-7 w-7 text-orange-600" />
                     </div>
                     <div className="text-right">
-                      <div className="flex items-center text-sm text-orange-600 font-medium mb-1">
+                      <div className="flex items-center text-sm text-orange-700 font-medium mb-1">
                         <ArrowUpRight className="h-4 w-4 mr-1" />
                         +5
                       </div>
@@ -2330,11 +2442,11 @@ const EmployerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Shortlisted</p>
-                    <p className="text-3xl font-bold text-gray-900 mb-2">
+                    <p className="text-2xl font-bold text-gray-900 mb-1">
                       {dashboardData?.stats?.shortlistedCount || 0}
                     </p>
-                    <div className="w-full bg-orange-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full" style={{ width: '60%' }}></div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-orange-600 h-2 rounded-full" style={{ width: '60%' }}></div>
                     </div>
                   </div>
                 </div>
@@ -2345,16 +2457,16 @@ const EmployerDashboard = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 whileHover={{ y: -5 }}
-                className="relative bg-gradient-to-br from-purple-50 to-pink-100 rounded-3xl shadow-xl border border-purple-100 p-6 hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                className="relative bg-white rounded-3xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 overflow-hidden"
               >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full -mr-10 -mt-10"></div>
+                <div className="absolute top-0 right-0 w-20 h-20 bg-purple-50 rounded-full -mr-10 -mt-10"></div>
                 <div className="relative">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="h-14 w-14 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Crown className="h-7 w-7 text-white" />
+                    <div className="h-14 w-14 rounded-2xl flex items-center justify-center bg-purple-50 border border-purple-100">
+                      <Crown className="h-7 w-7 text-purple-600" />
                     </div>
                     <div className="text-right">
-                      <div className="flex items-center text-sm text-purple-600 font-medium mb-1">
+                      <div className="flex items-center text-sm text-purple-700 font-medium mb-1">
                         <ArrowUpRight className="h-4 w-4 mr-1" />
                         +3
                       </div>
@@ -2363,87 +2475,18 @@ const EmployerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Rejected</p>
-                    <p className="text-3xl font-bold text-gray-900 mb-2">
+                    <p className="text-2xl font-bold text-gray-900 mb-1">
                       {dashboardData?.stats?.rejectedCount || 0}
                     </p>
-                    <div className="w-full bg-purple-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full" style={{ width: '90%' }}></div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-purple-600 h-2 rounded-full" style={{ width: '90%' }}></div>
                     </div>
                   </div>
                 </div>
               </motion.div>
             </div>
 
-            {/* Secondary Stats Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-4 hover:shadow-xl transition-all duration-300"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-gradient-to-r from-indigo-500 to-blue-500 rounded-lg flex items-center justify-center">
-                    <Eye className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Views</p>
-                    <p className="text-xl font-bold text-gray-900">{dashboardData?.stats?.totalViews?.toLocaleString() || '0'}</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-4 hover:shadow-xl transition-all duration-300"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-gradient-to-r from-teal-500 to-green-500 rounded-lg flex items-center justify-center">
-                    <Target className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Response Rate</p>
-                    <p className="text-xl font-bold text-gray-900">{dashboardData?.stats?.responseRate || 0}%</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-4 hover:shadow-xl transition-all duration-300"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Avg. Time to Hire</p>
-                    <p className="text-xl font-bold text-gray-900">{dashboardData?.stats?.avgTimeToHire || 0} days</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-                className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-4 hover:shadow-xl transition-all duration-300"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-gradient-to-r from-rose-500 to-pink-500 rounded-lg flex items-center justify-center">
-                    <Sparkles className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Quality Score</p>
-                    <p className="text-xl font-bold text-gray-900">4.8/5</p>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
+            {/* Secondary Stats Row removed per request */}
 
             {/* Enhanced Quick Actions */}
             <motion.div
@@ -2454,7 +2497,7 @@ const EmployerDashboard = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Quick Actions</h3>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Quick Actions</h3>
                   <p className="text-gray-600">Streamline your hiring process with one-click actions</p>
                 </div>
                 <div className="h-12 w-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -2535,7 +2578,7 @@ const EmployerDashboard = () => {
               >
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Recent Applications</h3>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Recent Applications</h3>
                     <p className="text-gray-600">Latest candidate applications for review</p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -3057,6 +3100,89 @@ const EmployerDashboard = () => {
           }
         }}
       />
+    )}
+
+    {/* Status Update Modal */}
+    {showStatusModal && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        onClick={() => setShowStatusModal(false)}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4 rounded-t-2xl">
+            <div className="flex items-center">
+              <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center mr-3">
+                <CheckCircle className="h-5 w-5 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                Update Application Status
+              </h3>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="px-6 py-6">
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                New Status
+              </label>
+              <select
+                value={statusUpdateData.newStatus}
+                onChange={(e) => setStatusUpdateData(prev => ({ ...prev, newStatus: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select Status</option>
+                <option value="pending">Pending</option>
+                <option value="shortlisted">Shortlisted</option>
+                <option value="accepted">Selected</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes (Optional)
+              </label>
+              <textarea
+                value={statusUpdateData.notes}
+                onChange={(e) => setStatusUpdateData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Add any notes for the candidate..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-20 resize-none"
+              />
+            </div>
+
+            <div className="flex space-x-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowStatusModal(false)}
+                className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={confirmStatusUpdate}
+                disabled={!statusUpdateData.newStatus}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Update Status
+              </motion.button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
     )}
 
     </ErrorBoundary>

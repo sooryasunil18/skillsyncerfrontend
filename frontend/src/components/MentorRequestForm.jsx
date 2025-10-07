@@ -334,12 +334,12 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       >
         <motion.div 
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center"
+          className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center border border-gray-100"
         >
           <motion.div
             initial={{ scale: 0 }}
@@ -357,7 +357,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={onClose}
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200"
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
           >
             Close
           </motion.button>
@@ -370,15 +370,15 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-100"
       >
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-gray-200 sticky top-0 bg-white/80 backdrop-blur-sm z-10">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-2xl font-bold text-gray-900">Submit Mentor Request</h3>
@@ -386,7 +386,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
             >
               <X className="w-6 h-6 text-gray-500" />
             </button>
@@ -410,7 +410,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
           </div>
 
           {/* Employee Information */}
-          <div className="bg-gray-50 rounded-xl p-6">
+          <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <User className="w-5 h-5 mr-2 text-indigo-600" />
               Employee Information
@@ -425,7 +425,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                   type="text"
                   value={formData.employeeName}
                   onChange={(e) => handleInputChange('employeeName', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.employeeName ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter employee's full name"
@@ -443,7 +443,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                   type="email"
                   value={formData.employeeEmail}
                   onChange={(e) => handleInputChange('employeeEmail', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.employeeEmail ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter employee's email"
@@ -461,7 +461,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                   type="tel"
                   value={formData.employeePhone}
                   onChange={(e) => handleInputChange('employeePhone', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.employeePhone ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter phone number"
@@ -478,7 +478,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                 <select
                   value={formData.employeePosition}
                   onChange={(e) => handleInputChange('employeePosition', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.employeePosition ? 'border-red-300' : 'border-gray-300'
                   }`}
                 >
@@ -499,7 +499,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                 <select
                   value={formData.employeeDepartment}
                   onChange={(e) => handleInputChange('employeeDepartment', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.employeeDepartment ? 'border-red-300' : 'border-gray-300'
                   }`}
                 >
@@ -520,7 +520,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                 <select
                   value={formData.yearsOfExperience}
                   onChange={(e) => handleInputChange('yearsOfExperience', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.yearsOfExperience ? 'border-red-300' : 'border-gray-300'
                   }`}
                 >
@@ -539,7 +539,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
           </div>
 
           {/* Expertise and Justification */}
-          <div className="bg-gray-50 rounded-xl p-6">
+          <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
             <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <Award className="w-5 h-5 mr-2 text-indigo-600" />
               Expertise & Justification
@@ -554,7 +554,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                   type="text"
                   value={formData.expertise}
                   onChange={(e) => handleInputChange('expertise', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="e.g., React, Node.js, Python, Machine Learning (comma-separated)"
                 />
                 <p className="text-xs text-gray-500 mt-1">Separate multiple areas with commas</p>
@@ -568,7 +568,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                   value={formData.justification}
                   onChange={(e) => handleInputChange('justification', e.target.value)}
                   rows={4}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
+                  className={`w-full px-4 py-3 border rounded-lg shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                     errors.justification ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="Explain why this employee should be assigned as a mentor. Include their qualifications, experience, and how they can help guide others..."
@@ -597,7 +597,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
             >
               Cancel
             </button>
@@ -606,7 +606,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
               disabled={loading}
               whileHover={{ scale: loading ? 1 : 1.05 }}
               whileTap={{ scale: loading ? 1 : 0.95 }}
-              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {loading ? (
                 <>

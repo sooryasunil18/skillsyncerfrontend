@@ -13,6 +13,7 @@ import EmployerInfo from './pages/EmployerInfo';
 import ResetPassword from './pages/ResetPassword';
 import JobseekerDashboard from './pages/JobseekerDashboard';
 import EmployerDashboard from './pages/EmployerDashboard';
+import Settings from './pages/Settings';
 import MentorDashboard from './pages/MentorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
@@ -30,7 +31,8 @@ function Layout() {
     '/mentor-dashboard',
     '/employee-dashboard',
     '/admin-dashboard',
-    '/admin-login'
+    '/admin-login',
+    '/settings'
   ];
   const isDashboardRoute = dashboardRoutes.includes(location.pathname);
 
@@ -54,6 +56,7 @@ function Layout() {
           <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </AnimatePresence>
       {!isDashboardRoute && <Footer />}
