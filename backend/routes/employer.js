@@ -13,6 +13,37 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Get employees for the logged-in company/employer
+router.get('/employees', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'employer' && req.user.role !== 'company') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Only employers can access this resource.'
+      });
+    }
+
+    // Employees have employeeProfile.companyId referencing the company user id
+    const employees = await User.find({
+      role: 'employee',
+      'employeeProfile.companyId': req.user._id
+    })
+      .select('name email isActive createdAt employeeProfile.position employeeProfile.department lastLogin')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: employees
+    });
+  } catch (error) {
+    console.error('Error fetching employees for employer:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching employees'
+    });
+  }
+});
+
 // Get all internship postings for employer
 router.get('/internships', protect, async (req, res) => {
   try {
@@ -556,10 +587,39 @@ router.get('/applications-detailed', protect, async (req, res) => {
     const endIndex = page * limit;
     const paginatedApplications = applications.slice(startIndex, endIndex);
 
+    // Attach rich details for recruiter dashboard rendering
+    const withSummaries = paginatedApplications.map((app) => ({
+      _id: app._id,
+      status: app.status,
+      matchScore: app.matchScore,
+      decision: app.decision,
+      summary: app.summary,
+      appliedAt: app.appliedAt,
+      createdAt: app.createdAt,
+      personalDetails: app.personalDetails,
+      educationDetails: app.educationDetails,
+      workExperience: app.workExperience,
+      additionalInfo: app.additionalInfo,
+      internshipDetails: app.internshipDetails,
+      jobseeker: app.jobseekerId ? {
+        _id: app.jobseekerId._id || app.jobseekerId,
+        name: app.jobseekerId.name,
+        email: app.jobseekerId.email,
+        profilePicture: app.jobseekerId.profile?.profilePicture
+      } : null,
+      internship: app.internshipId ? {
+        _id: app.internshipId._id || app.internshipId,
+        title: app.internshipId.title,
+        companyName: app.internshipId.companyName,
+        startDate: app.internshipId.startDate,
+        duration: app.internshipId.duration
+      } : null
+    }));
+
     res.json({
       success: true,
       data: {
-        applications: paginatedApplications,
+        applications: withSummaries,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(applications.length / limit),

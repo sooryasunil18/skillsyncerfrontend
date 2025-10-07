@@ -1192,7 +1192,7 @@ router.get('/internships/:id', async (req, res) => {
   }
 });
 
-// @desc    Apply for an internship
+// @desc    Apply for an internship (with auto-filtering)
 // @route   POST /api/jobseeker/internships/:id/apply
 // @access  Private (Jobseeker only)
 router.post('/internships/:id/apply', async (req, res) => {
@@ -1245,28 +1245,88 @@ router.post('/internships/:id/apply', async (req, res) => {
       });
     }
 
-    // Apply for the internship
-    const applicationResult = internship.applyForInternship(
-      req.user._id,
+    // Build centralized detailed application and compute matching
+    const profile = await JobseekerProfile.findOne({ userId: req.user._id });
+    const { extractPostingCriteria, extractApplicant, computeMatchScore, decideAction, buildSummary } = require('../utils/matching');
+
+    const criteria = extractPostingCriteria(internship);
+    const applicant = extractApplicant(profile || {});
+    const { score, matched, unmatched } = computeMatchScore(criteria, applicant);
+    const decision = decideAction(score, 80);
+
+    const application = new InternshipApplication({
+      internshipId: internship._id,
+      jobseekerId: req.user._id,
+      employerId: internship.employerId,
+      internshipDetails: {
+        title: internship.title,
+        type: internship.stipend?.type === 'Unpaid' ? 'Unpaid' : 'Paid',
+        duration: internship.duration,
+        startDate: internship.startDate,
+        workMode: internship.mode,
+        eligibility: (/freshers/i.test(internship.eligibility) ? 'Freshers Only' : /experience|experienced/i.test(internship.eligibility) ? 'Experienced Only' : 'Both')
+      },
+      personalDetails: {
+        fullName: req.user.name || 'Applicant',
+        dateOfBirth: new Date(0),
+        gender: 'Other',
+        contactNumber: req.user.phone || 'NA',
+        emailAddress: req.user.email,
+        linkedinProfile: '',
+        githubPortfolio: ''
+      },
+      educationDetails: {
+        highestQualification: (profile?.education?.[0]?.degree || 'NA'),
+        institutionName: (profile?.education?.[0]?.institution || 'NA'),
+        yearOfGraduation: parseInt((profile?.education?.[0]?.year || '0')) || new Date().getFullYear(),
+        cgpaPercentage: ''
+      },
+      workExperience: {},
+      skills: {
+        technicalSkills: profile?.skills || [],
+        softSkills: []
+      },
+      projects: [],
+      additionalInfo: {
+        whyJoinInternship: coverLetter || '',
+        achievementsCertifications: '',
+        resumeUrl: resumeUrl,
+        portfolioUrl: ''
+      },
+      declarations: {
+        informationTruthful: true,
+        consentToShare: true
+      },
+      status: decision === 'Proceed to Recruiter' ? 'reviewed' : 'rejected',
+      matchScore: score,
+      matching: { matched, unmatched },
+      decision,
+      summary: buildSummary(req.user.name, score, matched, unmatched)
+    });
+
+    await application.save();
+
+    // Maintain backward compatibility array on posting
+    internship.applications.push({
+      jobseekerId: req.user._id,
+      appliedAt: new Date(),
+      status: application.status,
       resumeUrl,
-      coverLetter || ''
-    );
-
-    if (!applicationResult.success) {
-      return res.status(400).json({
-        success: false,
-        message: applicationResult.message
-      });
-    }
-
+      coverLetter: coverLetter || ''
+    });
+    internship.applicationsCount = internship.applications.length;
+    internship.availableSeats = Math.max(0, internship.availableSeats - 1);
     await internship.save();
 
     res.json({
       success: true,
       message: 'Application submitted successfully',
       data: {
-        applicationId: applicationResult.applicationId,
-        appliedAt: new Date()
+        applicationId: application._id,
+        matchScore: score,
+        decision,
+        summary: application.summary,
+        appliedAt: application.appliedAt
       }
     });
 
@@ -1333,6 +1393,7 @@ router.get('/applications', async (req, res) => {
 router.post('/internships/:id/apply-detailed', async (req, res) => {
   try {
     const InternshipApplication = require('../models/InternshipApplication');
+    const { extractPostingCriteria, extractApplicant, computeMatchScore, decideAction, buildSummary } = require('../utils/matching');
     const applicationData = req.body;
     
     const internship = await InternshipPosting.findById(req.params.id);
@@ -1395,13 +1456,26 @@ router.post('/internships/:id/apply-detailed', async (req, res) => {
       declarations: applicationData.declarations
     });
 
+    // Auto-match using applicant profile
+    const profile = await JobseekerProfile.findOne({ userId: req.user._id });
+    const criteria = extractPostingCriteria(internship);
+    const applicant = extractApplicant(profile || {});
+    const { score, matched, unmatched } = computeMatchScore(criteria, applicant);
+    const decision = decideAction(score, 80);
+
+    application.matchScore = score;
+    application.matching = { matched, unmatched };
+    application.decision = decision;
+    application.status = decision === 'Proceed to Recruiter' ? 'reviewed' : 'rejected';
+    application.summary = buildSummary(req.user.name, score, matched, unmatched);
+
     await application.save();
 
     // Also add to the internship's applications array for backward compatibility
     internship.applications.push({
       jobseekerId: req.user._id,
       appliedAt: new Date(),
-      status: 'pending',
+      status: application.status,
       resumeUrl: applicationData.additionalInfo.resumeUrl,
       coverLetter: applicationData.additionalInfo.whyJoinInternship
     });

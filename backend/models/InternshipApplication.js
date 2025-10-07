@@ -198,6 +198,28 @@ const InternshipApplicationSchema = new mongoose.Schema({
     default: 'pending'
   },
 
+  // Automated matching results
+  matchScore: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  matching: {
+    matched: { type: [String], default: [] },
+    unmatched: { type: [String], default: [] }
+  },
+  decision: {
+    type: String,
+    enum: ['Proceed to Recruiter', 'Auto-Rejected', null],
+    default: null
+  },
+  summary: {
+    type: String,
+    trim: true,
+    maxlength: 1000
+  },
+
   // Employer feedback and notes
   employerNotes: {
     type: String,

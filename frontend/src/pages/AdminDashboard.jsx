@@ -77,6 +77,8 @@ const AdminDashboard = () => {
   const [pendingEmployeeRequestsCount, setPendingEmployeeRequestsCount] = useState(0);
   const [selectedMentorRequest, setSelectedMentorRequest] = useState(null);
   const [showMentorRequestModal, setShowMentorRequestModal] = useState(false);
+  const [selectedMentor, setSelectedMentor] = useState(null);
+  const [showMentorModal, setShowMentorModal] = useState(false);
   const [mentorFormData, setMentorFormData] = useState({
     name: '',
     email: '',
@@ -86,6 +88,20 @@ const AdminDashboard = () => {
     location: ''
   });
   const navigate = useNavigate();
+
+  // Standard UI styles (professional, consistent)
+  const ui = {
+    section: 'space-y-6',
+    card: 'bg-white rounded-2xl shadow-md border border-gray-200',
+    headerBar: 'px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-2xl',
+    tableWrap: 'overflow-x-auto',
+    tableHead: 'bg-gray-50',
+    tableHeadCell: 'px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider',
+    tableCell: 'px-6 py-4 whitespace-nowrap text-sm text-gray-700',
+    badgeInfo: 'inline-flex px-2 py-1 text-xs font-semibold rounded-full',
+    btnPrimary: 'flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors',
+    btnNeutral: 'flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors'
+  };
 
   // API Functions
   const fetchStats = async () => {
@@ -579,7 +595,7 @@ const AdminDashboard = () => {
       <motion.div 
         initial={{ x: -300 }}
         animate={{ x: 0 }}
-        className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-white shadow-xl relative transition-all duration-300 border-r border-gray-200/50`}
+        className={`${sidebarCollapsed ? 'w-20' : 'w-64'} bg-white shadow-xl relative transition-all duration-300 border-r border-gray-200/50`}
       >
         {/* Logo & Admin Profile Combined Section */}
         <div className="p-4 border-b border-gray-200/50 bg-gradient-to-br from-blue-50/30 via-purple-50/20 to-indigo-50/30 hover:from-blue-50/50 hover:via-purple-50/40 hover:to-indigo-50/50 transition-all duration-300 group cursor-pointer">
@@ -598,10 +614,10 @@ const AdminDashboard = () => {
             {/* Brand Name - Compact */}
             {!sidebarCollapsed && (
               <div className="mb-1">
-                <h1 className="text-base font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
+                <h1 className="text-sm font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
                   SkillSyncer
                 </h1>
-                <div className="h-0.5 w-10 bg-gradient-to-r from-blue-400 to-purple-500 mx-auto mt-0.5 rounded-full"></div>
+                <div className="h-0.5 w-8 bg-gradient-to-r from-blue-400 to-purple-500 mx-auto mt-0.5 rounded-full"></div>
               </div>
             )}
             
@@ -644,9 +660,9 @@ const AdminDashboard = () => {
                 </p>
                 
                 {/* Online Status Badge with Time */}
-                <div className="inline-flex items-center space-x-1.5 bg-green-100 group-hover:bg-green-200 px-2.5 py-0.5 rounded-full transition-all duration-200">
+                <div className="inline-flex items-center space-x-1.5 bg-green-100 group-hover:bg-green-200 px-2 py-0.5 rounded-full transition-all duration-200">
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-green-700 font-medium">Online</span>
+                  <span className="text-[11px] text-green-700 font-medium">Online</span>
                   <Clock className="w-2.5 h-2.5 text-green-600" />
                   <span className="text-xs text-green-600 font-mono">
                     {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -695,7 +711,7 @@ const AdminDashboard = () => {
         </button>
 
         {/* Navigation */}
-        <nav className="p-4 flex-1 space-y-2">
+        <nav className="p-3 flex-1 space-y-1.5">
           {sidebarItems.map((item, index) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -706,25 +722,25 @@ const AdminDashboard = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group relative overflow-hidden ${
+                className={`w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-lg text-left text-sm transition-all duration-200 group relative overflow-hidden ${
                   isActive
-                    ? `bg-gradient-to-r ${item.color} text-white shadow-lg transform scale-105`
+                    ? `bg-gradient-to-r ${item.color} text-white shadow-md`
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
                 {isActive && (
                   <motion.div
                     layoutId="activeTab"
-                    className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent rounded-xl"
+                    className="absolute inset-0 bg-gradient-to-r from-white/15 to-transparent rounded-lg"
                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   />
                 )}
-                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'} transition-colors`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'} transition-colors`} />
                 {!sidebarCollapsed && (
                   <span className={`font-medium ${isActive ? 'text-white' : ''}`}>{item.name}</span>
                 )}
                 {!sidebarCollapsed && (item.id === 'mentor-requests' || item.id === 'employee-requests') && (
-                  <span className={`ml-auto inline-flex items-center justify-center rounded-full text-xs font-semibold px-2 py-0.5 ${
+                  <span className={`ml-auto inline-flex items-center justify-center rounded-full text-[10px] font-semibold px-1.5 py-0.5 ${
                     item.id === 'mentor-requests'
                       ? 'bg-violet-100 text-violet-700'
                       : 'bg-teal-100 text-teal-700'
@@ -736,7 +752,7 @@ const AdminDashboard = () => {
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="ml-auto w-2 h-2 bg-white rounded-full"
+                    className="ml-auto w-1.5 h-1.5 bg-white rounded-full"
                   />
                 )}
               </motion.button>
@@ -1701,12 +1717,23 @@ const AdminDashboard = () => {
                                   </motion.button>
                                 </div>
                               ) : (
-                                <span className="text-gray-400">
-                                  {request.status === 'approved' ? 'Approved' : 'Rejected'}
-                                  {request.reviewedAt && (
-                                    <div className="text-xs text-gray-500 mt-1">on {formatDate(request.reviewedAt)}</div>
-                                  )}
-                                </span>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-gray-600">
+                                    {request.status === 'approved' ? 'Approved' : 'Rejected'}
+                                    {request.reviewedAt && (
+                                      <div className="text-xs text-gray-500 mt-1">on {formatDate(request.reviewedAt)}</div>
+                                    )}
+                                  </span>
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => { setSelectedMentorRequest(request); setShowMentorRequestModal(true); }}
+                                    className="flex items-center space-x-1 px-3 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    <span>View</span>
+                                  </motion.button>
+                                </div>
                               )}
                             </td>
                           </motion.tr>
@@ -2552,13 +2579,10 @@ const AdminDashboard = () => {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Mentor
+                          Name
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Expertise
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Experience
+                          Email
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
@@ -2587,19 +2611,11 @@ const AdminDashboard = () => {
                               </div>
                               <div className="ml-4">
                                 <div className="text-sm font-medium text-gray-900">{mentor.name}</div>
-                                <div className="text-sm text-gray-500">{mentor.email}</div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {mentor.mentorProfile?.expertise && mentor.mentorProfile.expertise.length > 0 
-                                ? mentor.mentorProfile.expertise.join(', ') 
-                                : 'Not specified'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{mentor.mentorProfile?.yearsOfExperience || 'Not specified'}</div>
+                            <div className="text-sm text-gray-900">{mentor.email}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -2629,6 +2645,7 @@ const AdminDashboard = () => {
                               <button
                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="View Details"
+                                onClick={() => { setSelectedMentor(mentor); setShowMentorModal(true); }}
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
@@ -2708,6 +2725,60 @@ const AdminDashboard = () => {
             </motion.div>
           </AnimatePresence>
         )}
+
+        {/* Mentor Details Modal */}
+        <AnimatePresence>
+          {showMentorModal && selectedMentor && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Mentor Details</h3>
+                  <button onClick={() => setShowMentorModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                    <X className="w-5 h-5 text-gray-600" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Basic Info</h4>
+                      <div className="rounded-lg border p-3 text-sm text-gray-700">
+                        <p><span className="font-semibold">Name:</span> {selectedMentor.name}</p>
+                        <p><span className="font-semibold">Email:</span> {selectedMentor.email}</p>
+                        <p><span className="font-semibold">Status:</span> {selectedMentor.isActive ? 'Active' : 'Inactive'}</p>
+                        <p><span className="font-semibold">Joined:</span> {selectedMentor.createdAt ? new Date(selectedMentor.createdAt).toLocaleString() : '—'}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Mentor Profile</h4>
+                      <div className="rounded-lg border p-3 text-sm text-gray-700">
+                        <p><span className="font-semibold">Experience:</span> {selectedMentor.mentorProfile?.yearsOfExperience || 'Not specified'}</p>
+                        {selectedMentor.mentorProfile?.expertise?.length > 0 && (
+                          <p><span className="font-semibold">Expertise:</span> {selectedMentor.mentorProfile.expertise.join(', ')}</p>
+                        )}
+                        {selectedMentor.mentorProfile?.phone && (
+                          <p><span className="font-semibold">Phone:</span> {selectedMentor.mentorProfile.phone}</p>
+                        )}
+                        {selectedMentor.mentorProfile?.location && (
+                          <p><span className="font-semibold">Location:</span> {selectedMentor.mentorProfile.location}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Employee Requests Section */}
         {activeSection === 'employee-requests' && (

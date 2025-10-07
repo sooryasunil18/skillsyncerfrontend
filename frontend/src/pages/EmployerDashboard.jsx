@@ -4,6 +4,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import InternshipPostingForm from '../components/InternshipPostingForm';
 import MentorRequestForm from '../components/MentorRequestForm';
 import { employerApi } from '../utils/api';
+import { API_BASE_URL } from '../config/api';
 import {
   Users,
   Building,
@@ -135,6 +136,8 @@ const EmployerDashboard = () => {
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [showMentorRequestForm, setShowMentorRequestForm] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
   
   // Mentor requests state
   const [mentorRequests, setMentorRequests] = useState([]);
@@ -318,6 +321,30 @@ const EmployerDashboard = () => {
 
     initializeDashboard();
   }, [navigate]);
+
+  const loadEmployees = async () => {
+    try {
+      setLoadingEmployees(true);
+      const token = localStorage.getItem('token');
+      const resp = await fetch(`${API_BASE_URL}/api/employer/employees`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await resp.json();
+      if (data?.success) {
+        setEmployees(data.data || []);
+      }
+    } catch (e) {
+      // non-fatal
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'employees') {
+      loadEmployees();
+    }
+  }, [activeSection]);
 
   // Load internships when internships section is active or when component mounts
   useEffect(() => {
@@ -637,11 +664,86 @@ const EmployerDashboard = () => {
     { name: 'Company Profile', icon: Building, section: 'profile', current: activeSection === 'profile' },
     { name: 'Internship Postings', icon: Plus, section: 'internships', current: activeSection === 'internships' },
     { name: 'Applications Received', icon: FileText, section: 'applications', current: activeSection === 'applications' },
-    { name: 'Mentor Requests', icon: UserCheck, section: 'mentor-requests', current: activeSection === 'mentor-requests' }
+    { name: 'Mentor Requests', icon: UserCheck, section: 'mentor-requests', current: activeSection === 'mentor-requests' },
+    { name: 'Employees', icon: Users, section: 'employees', current: activeSection === 'employees' }
   ];
 
   const renderSectionContent = () => {
     switch (activeSection) {
+      case 'employees':
+        return (
+          <div className="space-y-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <Users className="w-6 h-6 mr-3 text-blue-600" />
+                  Employees
+                </h2>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={loadEmployees}
+                  disabled={loadingEmployees}
+                  className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingEmployees ? 'animate-spin' : ''}`} />
+                  Refresh
+                </motion.button>
+              </div>
+              {loadingEmployees ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading employees...</p>
+                  </div>
+                </div>
+              ) : employees.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="h-24 w-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Users className="h-12 w-12 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Employees Found</h3>
+                  <p className="text-gray-600">Approved employee requests will appear here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {employees.map((emp) => (
+                        <tr key={emp._id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{emp.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.email}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.employeeProfile?.department || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.employeeProfile?.position || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{emp.createdAt ? new Date(emp.createdAt).toLocaleDateString() : '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${emp.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {emp.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        );
       case 'internships':
         return (
           <div className="space-y-8">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { API_BASE_URL } from '../config/api';
 import {
@@ -28,50 +28,246 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
     expertise: '',
     yearsOfExperience: ''
   });
+  const [companyIndustry, setCompanyIndustry] = useState('');
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [positionOptions, setPositionOptions] = useState([]);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(false);
 
+  // Map backend industry to categories used by titles endpoint
+  const industryToCategory = useMemo(() => ({
+    technology: 'IT/Technology',
+    finance: 'Banking',
+    healthcare: 'Healthcare',
+    education: 'Education'
+  }), []);
+
+  // Department suggestions per industry
+  const getDepartmentsForIndustry = (industry) => {
+    switch (industry) {
+      case 'technology':
+        return ['Engineering', 'Product', 'Quality Assurance', 'DevOps', 'Data Science', 'IT Support', 'Sales', 'Marketing', 'Human Resources', 'Finance', 'Customer Success'];
+      case 'finance':
+        return ['Finance', 'Risk Management', 'Compliance', 'Operations', 'Information Technology', 'Sales', 'Marketing', 'Human Resources', 'Customer Service'];
+      case 'healthcare':
+        return ['Clinical', 'Research & Development', 'Healthcare IT', 'Administration', 'Operations', 'Human Resources', 'Finance'];
+      case 'education':
+        return ['Teaching', 'Curriculum', 'Student Affairs', 'Administration', 'IT', 'Library', 'Career Services', 'Marketing', 'Human Resources'];
+      case 'retail':
+      case 'manufacturing':
+      case 'consulting':
+      case 'media':
+      case 'real-estate':
+      case 'transportation':
+      case 'other':
+      default:
+        return ['Operations', 'Sales', 'Marketing', 'Information Technology', 'Human Resources', 'Finance', 'Customer Support'];
+    }
+  };
+
+  // Load current company (employer) details for industry
+  useEffect(() => {
+    const loadCompany = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const resp = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data?.success && data.data?.user) {
+          const industry = data.data.user.company?.industry || '';
+          setCompanyIndustry(industry);
+          setDepartmentOptions(getDepartmentsForIndustry(industry));
+        }
+      } catch (e) {
+        // non-fatal
+      }
+    };
+    loadCompany();
+  }, []);
+
+  // Load position options based on industry category
+  useEffect(() => {
+    const loadPositions = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const category = industryToCategory[companyIndustry] || '';
+        const qs = category ? `?industry=${encodeURIComponent(category)}` : '';
+        const resp = await fetch(`${API_BASE_URL}/api/employer/internship-titles${qs}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data?.success && Array.isArray(data.data)) {
+          setPositionOptions(data.data);
+        }
+      } catch (e) {
+        // non-fatal
+      }
+    };
+    loadPositions();
+  }, [companyIndustry, industryToCategory]);
+
+  // ---------- Validation helpers ----------
+  const sanitizeString = (value) => (value ?? '').toString();
+  const trimToNull = (value) => {
+    const v = sanitizeString(value).trim();
+    return v.length === 0 ? '' : v;
+  };
+  const isValidEmail = (email) => {
+    const value = sanitizeString(email).trim();
+    // RFC5322-lite, practical production regex
+    const re = /^(?:[a-zA-Z0-9_'^&\/+-])+(?:\.(?:[a-zA-Z0-9_'^&\/+-])+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
+    return re.test(value) && value.length <= 254;
+  };
+  const normalizePhone = (phone) => sanitizeString(phone).replace(/[^0-9]/g, '');
+  const isValidPhone = (phone) => {
+    const normalized = normalizePhone(phone);
+    // India format: exactly 10 digits, starting with 6,7,8,9
+    return /^[6-9]\d{9}$/.test(normalized);
+  };
+  const isValidName = (name) => {
+    const n = sanitizeString(name).trim();
+    if (n.length < 2 || n.length > 100) return false;
+    // Only letters and spaces
+    return /^[\p{L}\s]+$/u.test(n);
+  };
+  const allowedExperience = new Set(['0-1','1-3','3-5','5-10','10+']);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
+    // Live validate specific field
+    setErrors(prev => {
+      const next = { ...prev };
+      const v = sanitizeString(value);
+      switch (field) {
+        case 'employeeName':
+          next.employeeName = isValidName(v) ? '' : 'Only characters and spaces are allowed';
+          break;
+        case 'employeeEmail':
+          next.employeeEmail = isValidEmail(v) ? '' : 'Enter valid email id';
+          break;
+        case 'employeePhone': {
+          const norm = normalizePhone(v);
+          next.employeePhone = isValidPhone(v) ? '' : 'Enter a valid 10-digit phone starting with 6/7/8/9';
+          // also reflect normalized characters only if user pasted
+          if (/[^0-9]/.test(v)) {
+            // do not forcibly replace user's input here; just validate
+          }
+          break;
+        }
+        case 'employeePosition':
+          next.employeePosition = (!v.trim()) ? 'Employee position is required' : (positionOptions.length > 0 && !positionOptions.includes(v) ? 'Select a position from the list' : '');
+          break;
+        case 'employeeDepartment':
+          next.employeeDepartment = (!v.trim()) ? 'Employee department is required' : (departmentOptions.length > 0 && !departmentOptions.includes(v) ? 'Select a department from the list' : '');
+          break;
+        case 'justification': {
+          const t = v.trim();
+          if (!t) {
+            next.justification = 'Justification is required';
+          } else if (!/^[\p{L}\s]+$/u.test(t)) {
+            next.justification = 'Only characters and spaces are allowed';
+          } else if (t.length < 50) {
+            next.justification = 'Justification must be at least 50 characters';
+          } else if (t.length > 1000) {
+            next.justification = 'Justification cannot exceed 1000 characters';
+          } else {
+            next.justification = '';
+          }
+          break;
+        }
+        case 'yearsOfExperience':
+          next.yearsOfExperience = allowedExperience.has(v) ? '' : 'Select a valid experience band';
+          break;
+        case 'expertise': {
+          const tokens = sanitizeString(v).split(',').map(s => s.trim()).filter(Boolean);
+          next.expertise = tokens.length > 20
+            ? 'Limit expertise to 20 items maximum'
+            : (tokens.some(t => t.length > 30) ? 'Each expertise item must be 30 characters or less' : '');
+          break;
+        }
+        default:
+          break;
+      }
+      return next;
+    });
   };
 
   const validateForm = () => {
     const newErrors = {};
     
-    if (!formData.employeeName.trim()) {
+    // Name
+    const name = trimToNull(formData.employeeName);
+    if (!name) {
       newErrors.employeeName = 'Employee name is required';
+    } else if (!isValidName(name)) {
+      newErrors.employeeName = 'Only characters and spaces are allowed';
     }
-    
-    if (!formData.employeeEmail.trim()) {
+
+    // Email
+    const email = trimToNull(formData.employeeEmail);
+    if (!email) {
       newErrors.employeeEmail = 'Employee email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.employeeEmail)) {
-      newErrors.employeeEmail = 'Please enter a valid email address';
+    } else if (!isValidEmail(email)) {
+      newErrors.employeeEmail = 'Enter valid email id';
     }
-    
-    if (!formData.employeePhone.trim()) {
+
+    // Phone
+    const phone = trimToNull(formData.employeePhone);
+    if (!phone) {
       newErrors.employeePhone = 'Employee phone is required';
+    } else if (!isValidPhone(phone)) {
+      newErrors.employeePhone = 'Enter a valid phone (10-15 digits, optional +)';
     }
-    
-    if (!formData.employeePosition.trim()) {
+
+    // Position (must be chosen)
+    const pos = trimToNull(formData.employeePosition);
+    if (!pos) {
       newErrors.employeePosition = 'Employee position is required';
+    } else if (positionOptions.length > 0 && !positionOptions.includes(pos)) {
+      newErrors.employeePosition = 'Select a position from the list';
     }
-    
-    if (!formData.employeeDepartment.trim()) {
+
+    // Department (must be chosen)
+    const dept = trimToNull(formData.employeeDepartment);
+    if (!dept) {
       newErrors.employeeDepartment = 'Employee department is required';
+    } else if (departmentOptions.length > 0 && !departmentOptions.includes(dept)) {
+      newErrors.employeeDepartment = 'Select a department from the list';
     }
-    
-    if (!formData.justification.trim()) {
+
+    // Justification
+    const just = trimToNull(formData.justification);
+    if (!just) {
       newErrors.justification = 'Justification is required';
-    } else if (formData.justification.length < 50) {
+    } else if (!/^[\p{L}\s]+$/u.test(just)) {
+      newErrors.justification = 'Only characters and spaces are allowed';
+    } else if (just.length < 50) {
       newErrors.justification = 'Justification must be at least 50 characters';
+    } else if (just.length > 1000) {
+      newErrors.justification = 'Justification cannot exceed 1000 characters';
     }
-    
+
+    // Years of experience
     if (!formData.yearsOfExperience) {
       newErrors.yearsOfExperience = 'Years of experience is required';
+    } else if (!allowedExperience.has(formData.yearsOfExperience)) {
+      newErrors.yearsOfExperience = 'Select a valid experience band';
+    }
+
+    // Expertise tokens (optional constraints)
+    if (sanitizeString(formData.expertise).trim()) {
+      const tokens = sanitizeString(formData.expertise)
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
+      if (tokens.length > 20) {
+        newErrors.expertise = 'Limit expertise to 20 items maximum';
+      } else if (tokens.some(t => t.length > 30)) {
+        newErrors.expertise = 'Each expertise item must be 30 characters or less';
+      }
     }
 
     setErrors(newErrors);
@@ -89,16 +285,29 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
     
     try {
       const token = localStorage.getItem('token');
+      // Prepare sanitized payload
+      const payload = {
+        employeeName: trimToNull(formData.employeeName),
+        employeeEmail: trimToNull(formData.employeeEmail),
+        employeePhone: normalizePhone(formData.employeePhone),
+        employeePosition: trimToNull(formData.employeePosition),
+        employeeDepartment: trimToNull(formData.employeeDepartment),
+        justification: trimToNull(formData.justification),
+        yearsOfExperience: formData.yearsOfExperience,
+        expertise: sanitizeString(formData.expertise)
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .slice(0, 20)
+      };
+
       const response = await fetch(`${API_BASE_URL}/api/mentor/request`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          expertise: formData.expertise ? formData.expertise.split(',').map(skill => skill.trim()).filter(skill => skill) : []
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -142,7 +351,7 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
           </motion.div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h3>
           <p className="text-gray-600 mb-6">
-            Your mentor request has been submitted successfully. The admin will review it and notify you of the decision.
+            Your mentor request was submitted successfully. Please wait for admin verification. You will be notified once it is reviewed.
           </p>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -266,15 +475,18 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Position *
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.employeePosition}
                   onChange={(e) => handleInputChange('employeePosition', e.target.value)}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
                     errors.employeePosition ? 'border-red-300' : 'border-gray-300'
                   }`}
-                  placeholder="e.g., Senior Developer, Team Lead"
-                />
+                >
+                  <option value="">Select position</option>
+                  {positionOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
                 {errors.employeePosition && (
                   <p className="text-red-500 text-sm mt-1">{errors.employeePosition}</p>
                 )}
@@ -284,15 +496,18 @@ const MentorRequestForm = ({ onClose, onSuccess }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Department *
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.employeeDepartment}
                   onChange={(e) => handleInputChange('employeeDepartment', e.target.value)}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
                     errors.employeeDepartment ? 'border-red-300' : 'border-gray-300'
                   }`}
-                  placeholder="e.g., Engineering, Marketing, Sales"
-                />
+                >
+                  <option value="">Select department</option>
+                  {departmentOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
                 {errors.employeeDepartment && (
                   <p className="text-red-500 text-sm mt-1">{errors.employeeDepartment}</p>
                 )}
