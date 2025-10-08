@@ -172,7 +172,7 @@ const userSchema = new mongoose.Schema({
     },
     industry: {
       type: String,
-      enum: ['technology', 'healthcare', 'finance', 'education', 'retail', 'manufacturing', 'consulting', 'media', 'real-estate', 'automotive', 'food', 'nonprofit', 'government', 'other'],
+      enum: ['technology', 'healthcare', 'finance', 'retail', 'manufacturing', 'consulting', 'media', 'real-estate', 'automotive', 'food', 'nonprofit', 'government'],
       trim: true
     },
     phone: {

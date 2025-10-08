@@ -1750,7 +1750,8 @@ const EmployerDashboard = () => {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gray-50 relative">
-      {/* Enhanced Header */}
+      {/* Enhanced Header (only on Dashboard) */}
+      {activeSection === 'dashboard' && (
       <div className="bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-200 lg:ml-56 relative">
         <div className="px-3 sm:px-5 lg:px-6 py-3 lg:py-5">
           <div className="flex items-center justify-between">
@@ -1860,6 +1861,7 @@ const EmployerDashboard = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>

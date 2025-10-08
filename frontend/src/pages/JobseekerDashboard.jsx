@@ -1036,7 +1036,8 @@ const JobseekerDashboard = () => {
         <div className="absolute bottom-40 right-20 w-48 h-48 bg-gradient-to-br from-emerald-400/20 to-teal-600/20 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Enhanced Header */}
+      {/* Enhanced Header (only on Dashboard) */}
+      {activeSection === 'dashboard' && (
       <div className="bg-white/90 backdrop-blur-lg shadow-xl border-b border-white/20 lg:ml-64 relative z-10">
         <div className="px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -1104,6 +1105,7 @@ const JobseekerDashboard = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Side Panel */}
       <AnimatePresence>
@@ -1254,32 +1256,7 @@ const JobseekerDashboard = () => {
           </div>
         </div>
 
-        {/* Enhanced User Profile Section */}
-        <div className="p-6 border-b border-gray-200/50">
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className="h-14 w-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <User className="h-7 w-7 text-white" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-green-500 rounded-full border-2 border-white"></div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-900 truncate">{user?.name || localStorage.getItem('userName') || 'User'}</h3>
-              <p className="text-sm text-gray-600 truncate">{user?.email || localStorage.getItem('userEmail') || 'user@example.com'}</p>
-              <div className="flex items-center mt-1">
-                <div className="h-1.5 w-16 bg-gray-200 rounded-full mr-2">
-                  <div 
-                    className={`h-1.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500`}
-                    style={{width: `${dashboardData?.profile?.completionPercentage || 0}%`}}
-                  ></div>
-                </div>
-                <span className="text-xs text-gray-500">
-                  {dashboardData?.profile?.completionPercentage || 0}% Complete
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Sidebar user profile card removed for cleaner look */}
 
         {/* Enhanced Navigation */}
         <nav className="flex-1 p-4">
@@ -1685,17 +1662,17 @@ const JobseekerDashboard = () => {
         </div>
 
         {/* Enhanced Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 gap-6">
           {/* Enhanced Profile Summary */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 }}
-            className="lg:col-span-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20"
+            className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20"
           >
-            <div className="p-6 border-b border-gray-200/50">
+            <div className="p-4 border-b border-gray-200/50">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                <h2 className="text-lg font-bold text-gray-900 flex items-center">
                   <User className="w-5 h-5 mr-2 text-blue-600" />
                   Profile Overview
                 </h2>
@@ -1707,22 +1684,22 @@ const JobseekerDashboard = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setShowProfileManager(true)}
-                    className="hidden sm:inline-flex bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg font-medium shadow-md"
+                    className="hidden sm:inline-flex bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-md"
                   >
                     Manage Profile
                   </motion.button>
                 </div>
               </div>
             </div>
-            <div className="p-6">
+            <div className="p-4">
               <div className="flex items-start space-x-6">
-                <div className="h-20 w-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <User className="h-10 w-10 text-white" />
+                <div className="h-16 w-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <User className="h-8 w-8 text-white" />
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 className="text-2xl font-bold text-gray-900">{user?.name || localStorage.getItem('userName') || 'User'}</h3>
+                      <h3 className="text-xl font-bold text-gray-900">{user?.name || localStorage.getItem('userName') || 'User'}</h3>
                       <div className="flex flex-wrap gap-2 mt-2">
                         <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">
                           <Mail className="w-4 h-4 mr-1.5" /> {user?.email || localStorage.getItem('userEmail') || 'user@example.com'}
@@ -1753,18 +1730,18 @@ const JobseekerDashboard = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setShowProfileManager(true)}
-                      className="mt-4 sm:mt-0 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium shadow hover:bg-blue-700"
+                      className="mt-4 sm:mt-0 bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium shadow hover:bg-blue-700"
                     >
                       Update Profile
                     </motion.button>
                   </div>
 
                   {user?.bio && (
-                    <p className="text-gray-700 mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-100">{user.bio}</p>
+                    <p className="text-gray-700 mt-3 p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-100">{user.bio}</p>
                   )}
 
                   {/* Skills Section */}
-                  <div className="mt-6">
+                  <div className="mt-4">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
                       <Award className="w-4 h-4 mr-2" />
                       Skills & Expertise
@@ -1800,7 +1777,7 @@ const JobseekerDashboard = () => {
                   </div>
 
                   {/* Education Section */}
-                  <div className="mt-6">
+                  <div className="mt-4">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
                       <GraduationCap className="w-4 h-4 mr-2" />
                       Education
@@ -1835,145 +1812,7 @@ const JobseekerDashboard = () => {
             </div>
           </motion.div>
 
-          {/* Enhanced Quick Actions & Recent Activity */}
-          <div className="space-y-8">
-            {/* Quick Actions */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20"
-            >
-              <div className="p-6 border-b border-gray-200/50">
-                <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                  <Target className="w-5 h-5 mr-2 text-green-600" />
-                  Quick Actions
-                </h2>
-              </div>
-              <div className="p-6 space-y-4">
-                {/* Dynamic Quick Actions based on profile completion */}
-                {dashboardData?.quickActions?.length > 0 ? (
-                  dashboardData.quickActions.map((action, index) => {
-                    const getActionIcon = (iconName) => {
-                      const icons = {
-                        'user': User,
-                        'code': Code,
-                        'file-text': FileText,
-                        'map-pin': MapPin,
-                        'phone': Phone,
-                        'briefcase': Briefcase,
-                        'camera': User, // fallback
-                        'link': Globe,
-                        'settings': Settings,
-                        'award': Award
-                      };
-                      return icons[iconName] || User;
-                    };
-
-                    const ActionIcon = getActionIcon(action.icon);
-                    const priorityColors = {
-                      high: 'from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600',
-                      medium: 'from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700',
-                      low: 'from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700'
-                    };
-
-                    return (
-                      <motion.button
-                        key={action.id}
-                        whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setActiveSection('profile')}
-                        className={`w-full bg-gradient-to-r ${priorityColors[action.priority]} text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg`}
-                      >
-                        <ActionIcon className="w-4 h-4 mr-2" />
-                        {action.title}
-                      </motion.button>
-                    );
-                  })
-                ) : (
-                  <>
-                    <motion.button
-                      whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setActiveSection('profile')}
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      Complete Profile
-                    </motion.button>
-                    
-                    <motion.button
-                      whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setActiveSection('jobs')}
-                      className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
-                    >
-                      <Search className="w-4 h-4 mr-2" />
-                      Find Jobs
-                    </motion.button>
-                  </>
-                )}
-                
-                <motion.button
-                  whileHover={{ scale: 1.02, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setActiveSection('applications')}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl py-3 px-4 flex items-center justify-center font-medium transition-all duration-200 shadow-lg"
-                >
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  View Applications
-                </motion.button>
-              </div>
-            </motion.div>
-
-            {/* Career Achievements */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.7 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20"
-            >
-              <div className="p-6 border-b border-gray-200/50">
-                <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                  <Award className="w-5 h-5 mr-2 text-orange-600" />
-                  Career Achievements
-                </h2>
-              </div>
-              <div className="p-6">
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                    <div className="h-8 w-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                      <Star className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Profile Optimizer</p>
-                      <p className="text-xs text-gray-600">Completed profile setup</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-100">
-                    <div className="h-8 w-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
-                      <Target className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Active Seeker</p>
-                      <p className="text-xs text-gray-600">Regular platform engagement</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
-                    <div className="h-8 w-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                      <Users className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Team Player</p>
-                      <p className="text-xs text-gray-600">Strong collaboration skills</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
+          
         </div>
 
             {/* Enhanced Footer */}
@@ -1981,7 +1820,7 @@ const JobseekerDashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
-              className="mt-16 bg-white/50 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6"
+              className="mt-10 bg-white/50 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">

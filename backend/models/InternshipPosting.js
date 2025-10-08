@@ -13,7 +13,7 @@ const InternshipPostingSchema = new mongoose.Schema({
   industry: {
     type: String,
     required: [true, 'Industry is required'],
-    enum: ['IT/Technology', 'Banking','Education', 'Other'],
+    enum: ['IT/Technology', 'Banking'],
     default: 'IT/Technology'
   },
   

@@ -77,7 +77,7 @@ const Auth = () => {
     {
       id: 'company',
       icon: Building,
-      title: 'Company',
+      title: 'Employer',
       description: 'Discover talented candidates and post opportunities',
       benefits: ['Talent discovery', 'Post job openings', 'Skills matching', 'Team building'],
       color: 'from-green-500 to-green-600',
@@ -646,14 +646,14 @@ const Auth = () => {
             <div className="text-center lg:text-left">
               <div className="mb-4">
                 <h1 className="text-4xl lg:text-5xl font-bold text-gray-900">
-                  {isLogin ? 'Welcome Back' : isCompanyRegistration ? 'Company Registration' : 'Join'} <span className="text-gradient">Skillsyncer</span>
+                  {isLogin ? 'Welcome Back' : isCompanyRegistration ? 'Employer Registration' : 'Join'} <span className="text-gradient">Skillsyncer</span>
                 </h1>
               </div>
               <p className="text-xl text-gray-600">
                 {isLogin 
                   ? 'Sign in to continue your career journey'
                   : isCompanyRegistration 
-                    ? 'Create your company account and start hiring'
+                    ? 'Create your employer account and start hiring'
                     : 'Start your career transformation today'
                 }
               </p>
@@ -969,8 +969,6 @@ const Auth = () => {
                             <option value="">Select Industry</option>
                             <option value="technology">Technology</option>
                             <option value="finance">Finance & Banking</option>
-                            <option value="education">Education</option>
-                            <option value="other">Other</option>
                           </select>
                         </div>
                       </div>

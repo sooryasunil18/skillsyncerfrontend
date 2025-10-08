@@ -268,23 +268,6 @@ router.get('/internship-titles', protect, async (req, res) => {
         'Quality Assurance Specialist',
         'Regulatory Affairs Specialist'
       ],
-      'Education': [
-        'Teaching Assistant',
-        'Curriculum Developer',
-        'Educational Technology Specialist',
-        'Student Affairs Coordinator',
-        'Research Assistant',
-        'Administrative Assistant',
-        'Library Assistant',
-        'Special Education Aide',
-        'Counseling Assistant',
-        'Assessment Coordinator',
-        'Content Writer',
-        'Instructional Designer',
-        'Academic Advisor',
-        'Admissions Counselor',
-        'Career Services Coordinator'
-      ]
     };
 
     let titles = [];

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   User,
@@ -29,18 +28,16 @@ import {
   Eye
 } from 'lucide-react';
 
-// Animation helpers
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 18 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut', delay } },
-});
+// Animations removed for static dashboard
 
-import { employerApi } from '../utils/api';
+import { employerApi, apiRequest } from '../utils/api';
 
 const EmployeeDashboard = () => {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [user, setUser] = useState({ name: '', email: '' });
+  const [companyName, setCompanyName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('overview');
   
@@ -56,6 +53,8 @@ const EmployeeDashboard = () => {
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [error, setError] = useState(null);
   const [secondaryRoles, setSecondaryRoles] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     const init = () => {
@@ -87,8 +86,8 @@ const EmployeeDashboard = () => {
     init();
     fetchUserData(); // Fetch updated user data including secondary roles
 
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    // Stop live time updates to keep dashboard static
+    return () => {};
   }, [navigate]);
 
   // Load applications when Applications section is active
@@ -132,6 +131,15 @@ const EmployeeDashboard = () => {
           setSecondaryRoles(data.data.user.secondaryRoles);
           localStorage.setItem('secondaryRoles', JSON.stringify(data.data.user.secondaryRoles));
         }
+        const u = data.data.user || {};
+        setUser({ name: u.name || 'Employee', email: u.email || '' });
+        // Prefer explicit employee profile phone, fallback to general profile.phone
+        setPhoneNumber((u.profile && u.profile.phone) || '');
+        // Company name best-effort: employer/company account's name or cached
+        const cachedCompany = localStorage.getItem('companyName');
+        const fromEmployeeCompanyId = u.employeeProfile?.companyId ? '' : '';
+        setCompanyName(u.company?.name || cachedCompany || 'Linked Company');
+        if (u.company?.name) localStorage.setItem('companyName', u.company.name);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -193,18 +201,18 @@ const EmployeeDashboard = () => {
   const Sidebar = () => (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-gray-900 to-gray-700 flex items-center justify-center shadow-sm ring-1 ring-white/15">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm ring-1 ring-blue-200">
           <Home className="h-5 w-5 text-white" />
         </div>
         <div>
-          <p className="text-[11px] text-white/60">SkillSyncer</p>
+          <p className="text-[11px] text-gray-500">SkillSyncer</p>
           <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-white">Employee</p>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">Approved</span>
+            <p className="text-sm font-semibold text-gray-900">Employee</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">Approved</span>
           </div>
         </div>
       </div>
-      <div className="px-4"><div className="h-px w-full bg-white/10" /></div>
+      <div className="px-4"><div className="h-px w-full bg-gray-200" /></div>
       <nav className="mt-4 px-2 space-y-1">
         {menu.map((item) => {
           const Icon = item.icon;
@@ -215,14 +223,14 @@ const EmployeeDashboard = () => {
               onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
               className={`group w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition
                 ${isActive
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'}
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'}
               `}
             >
-              <Icon className={`h-4 w-4 ${isActive ? 'text-gray-900' : 'text-white/70 group-hover:text-white'}`} />
+              <Icon className={`h-4 w-4 ${isActive ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-700'}`} />
               <span className="flex-1 text-left">{item.label}</span>
               {isActive ? (
-                <span className="text-[10px] uppercase tracking-wider text-gray-500">Active</span>
+                <span className="text-[10px] uppercase tracking-wider text-blue-600">Active</span>
               ) : (
                 <ChevronRight className="h-4 w-4 opacity-50" />
               )}
@@ -231,12 +239,12 @@ const EmployeeDashboard = () => {
         })}
       </nav>
       <div className="mt-auto p-3">
-        <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-          <p className="text-[11px] text-white/70">Signed in as</p>
-          <p className="text-sm font-medium text-white truncate">{user.email}</p>
+        <div className="rounded-2xl bg-white border border-gray-200 p-3">
+          <p className="text-[11px] text-gray-500">Signed in as</p>
+          <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>
           <button
             onClick={handleLogout}
-            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-white text-gray-900 px-3 py-2 text-sm font-medium hover:bg-gray-100"
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 text-white px-3 py-2 text-sm font-medium hover:bg-black"
           >
             <LogOut className="h-4 w-4" /> Logout
           </button>
@@ -320,7 +328,7 @@ const EmployeeDashboard = () => {
   const Overview = () => (
     <div className="space-y-6">
       {/* Hero */}
-      <motion.div {...fadeUp(0)} className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="absolute inset-0 opacity-80" style={{ backgroundImage: 'radial-gradient(circle at 0% 0%, #dbeafe 0, transparent 35%), radial-gradient(circle at 100% 0%, #fce7f3 0, transparent 35%), radial-gradient(circle at 100% 100%, #dcfce7 0, transparent 35%)' }} />
         <div className="relative p-6 sm:p-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -333,10 +341,10 @@ const EmployeeDashboard = () => {
                 Access company details, manage your profile, and keep your account secure. Quick links help you get started fast.
               </p>
               <div className="mt-4 flex items-center gap-3">
-                <button onClick={() => setActiveSection('profile')} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 text-white px-3 py-2 text-sm hover:bg-black">
+                <button onClick={() => setActiveSection('profile')} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 text-white px-3 py-2 text-sm hover:bg-blue-700">
                   <User className="h-4 w-4" /> Update Profile
                 </button>
-                <button onClick={() => setActiveSection('security')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
+                <button onClick={() => setActiveSection('security')} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-blue-50 hover:border-blue-200">
                   <Shield className="h-4 w-4" /> Change Password
                 </button>
               </div>
@@ -354,19 +362,19 @@ const EmployeeDashboard = () => {
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         {[
-          { title: 'Status', value: 'Active', icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { title: 'Role', value: 'Employee', icon: Briefcase, color: 'text-purple-600', bg: 'bg-purple-50' },
-          { title: 'Company Link', value: 'Verified', icon: Building, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { title: 'Join Date', value: 'Recently Verified', icon: Calendar, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { title: 'Status', value: 'Active', icon: CheckCircle, color: 'text-emerald-700', bg: 'bg-emerald-50' },
+          { title: 'Role', value: 'Employee', icon: Briefcase, color: 'text-indigo-700', bg: 'bg-indigo-50' },
+          { title: 'Company Link', value: companyName || 'Linked', icon: Building, color: 'text-blue-700', bg: 'bg-blue-50' },
+          { title: 'Join Date', value: 'Recently Verified', icon: Calendar, color: 'text-amber-700', bg: 'bg-amber-50' },
         ].map((c, idx) => {
           const Icon = c.icon;
           return (
-            <motion.div key={c.title} {...fadeUp(0.05 + idx * 0.05)} className="bg-white rounded-2xl shadow-sm p-5 border group hover:shadow-md transition">
+            <div key={c.title} className="bg-white rounded-2xl shadow-sm p-5 border group">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500">{c.title}</p>
@@ -376,14 +384,14 @@ const EmployeeDashboard = () => {
                   <Icon className={`h-5 w-5 ${c.color}`} />
                 </div>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
 
       {/* Content Panels */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <motion.div {...fadeUp(0.25)} className="xl:col-span-2 bg-white rounded-2xl shadow-sm border p-6">
+        <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><Activity className="h-5 w-5 text-gray-700" /> Recent Activity</h3>
             <button className="text-sm text-gray-600 hover:text-gray-900">View all</button>
@@ -407,9 +415,9 @@ const EmployeeDashboard = () => {
               );
             })}
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div {...fadeUp(0.3)} className="bg-white rounded-2xl shadow-sm border p-6">
+        <div className="bg-white rounded-2xl shadow-sm border p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Shield className="h-5 w-5 text-gray-700" /> Security Tips
           </h3>
@@ -421,11 +429,11 @@ const EmployeeDashboard = () => {
           <button onClick={() => setActiveSection('security')} className="mt-4 inline-flex items-center gap-2 text-sm text-gray-900 font-medium hover:underline">
             Review security settings <ArrowRight className="h-4 w-4" />
           </button>
-        </motion.div>
+        </div>
       </div>
 
       {/* Quick Links */}
-      <motion.div {...fadeUp(0.35)} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
           { title: 'My Profile', desc: 'Update your personal details', icon: User, action: () => setActiveSection('profile'), color: 'from-gray-900 to-black' },
           { title: 'Company', desc: 'View linked company info', icon: Building, action: () => setActiveSection('company'), color: 'from-blue-600 to-indigo-600' },
@@ -435,7 +443,6 @@ const EmployeeDashboard = () => {
           return (
             <button key={q.title} onClick={q.action} className="group text-left">
               <div className={`relative overflow-hidden rounded-2xl border bg-white p-6 shadow-sm transition hover:shadow-md`}>
-                <div className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${q.color} opacity-20`} />
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-gray-900 text-white flex items-center justify-center">
                     <Icon className="h-5 w-5" />
@@ -449,49 +456,80 @@ const EmployeeDashboard = () => {
             </button>
           );
         })}
-      </motion.div>
+      </div>
     </div>
   );
 
   const Profile = () => (
     <div className="space-y-6">
-      <motion.div {...fadeUp(0)} className="bg-white rounded-2xl shadow-sm border p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
         <p className="text-sm text-gray-500 mb-4">Keep your personal details accurate and up to date.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Full Name</label>
-            <input className="w-full rounded-lg border px-3 py-2 text-sm" defaultValue={user.name} />
+            <input className="w-full rounded-lg border px-3 py-2 text-sm" value={user.name} onChange={(e)=>setUser(prev=>({...prev, name:e.target.value}))} />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Company</label>
+            <input className="w-full rounded-lg border px-3 py-2 text-sm bg-gray-50" value={companyName} disabled />
           </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">Email</label>
-            <input className="w-full rounded-lg border px-3 py-2 text-sm bg-gray-50" defaultValue={user.email} disabled />
+            <input className="w-full rounded-lg border px-3 py-2 text-sm bg-gray-50" value={user.email} disabled />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Phone</label>
+            <input className="w-full rounded-lg border px-3 py-2 text-sm bg-gray-50" value={phoneNumber} disabled />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm text-gray-600 mb-1">Phone</label>
-            <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder="Add phone number" />
+            <label className="block text-sm text-gray-600 mb-1">Position</label>
+            <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder="Your position" />
           </div>
         </div>
-        <div className="mt-4 flex gap-3">
-          <button className="inline-flex items-center gap-2 bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-black">Save Changes</button>
+        <div className="mt-4 flex gap-3 items-center">
+          <button
+            disabled={saving}
+            onClick={async () => {
+              try {
+                setSaving(true);
+                setSaveError('');
+                const res = await apiRequest('/api/auth/profile', {
+                  method: 'PUT',
+                  body: JSON.stringify({ name: user.name })
+                });
+                if (!res.success) {
+                  setSaveError(res.data?.message || 'Failed to save');
+                }
+              } catch (e) {
+                setSaveError(e.message || 'Network error');
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-60"
+          >
+            Save Changes
+          </button>
           <button className="inline-flex items-center gap-2 border px-3 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          {saveError && <span className="text-sm text-rose-600">{saveError}</span>}
         </div>
-      </motion.div>
+      </div>
 
-      <motion.div {...fadeUp(0.05)} className="bg-white rounded-2xl shadow-sm border p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900">Preferences</h3>
         <p className="text-sm text-gray-500 mb-4">Customize your dashboard experience.</p>
         <div className="space-y-3 text-sm text-gray-700">
           <label className="flex items-center gap-3"><input type="checkbox" className="h-4 w-4" defaultChecked /> Show tips and guidance on dashboard</label>
           <label className="flex items-center gap-3"><input type="checkbox" className="h-4 w-4" /> Enable compact layout on small screens</label>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 
   const Company = () => (
     <div className="space-y-6">
-      <motion.div {...fadeUp(0)} className="bg-white rounded-2xl shadow-sm border p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900">Company Information</h3>
         <p className="text-sm text-gray-500 mb-4">Linked company details will appear here once fetched.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -500,13 +538,13 @@ const EmployeeDashboard = () => {
           <div className="rounded-xl border p-4"><p className="text-xs text-gray-500">Position</p><p className="text-sm font-medium text-gray-900">—</p></div>
           <div className="rounded-xl border p-4"><p className="text-xs text-gray-500">Employee ID</p><p className="text-sm font-medium text-gray-900">—</p></div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 
   const Security = () => (
     <div className="space-y-6">
-      <motion.div {...fadeUp(0)} className="bg-white rounded-2xl shadow-sm border p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900">Password</h3>
         <p className="text-sm text-gray-500 mb-4">Change your password regularly to keep your account secure.</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -515,21 +553,21 @@ const EmployeeDashboard = () => {
           <input type="password" className="rounded-lg border px-3 py-2 text-sm" placeholder="Confirm new password" />
         </div>
         <button className="mt-4 inline-flex items-center gap-2 bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-black">Update Password</button>
-      </motion.div>
+      </div>
 
-      <motion.div {...fadeUp(0.05)} className="bg-white rounded-2xl shadow-sm border p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900">Security Controls</h3>
         <div className="mt-3 space-y-3 text-sm text-gray-700">
           <label className="flex items-center gap-3"><input type="checkbox" className="h-4 w-4" defaultChecked /> Email me about new device logins</label>
           <label className="flex items-center gap-3"><input type="checkbox" className="h-4 w-4" /> Email me about password changes</label>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 
   const NotificationsPanel = () => (
     <div className="space-y-6">
-      <motion.div {...fadeUp(0)} className="bg-white rounded-2xl shadow-sm border p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900">Notification Settings</h3>
         <p className="text-sm text-gray-500 mb-4">Control how you receive updates and alerts.</p>
         <div className="space-y-3 text-sm text-gray-700">
@@ -537,50 +575,39 @@ const EmployeeDashboard = () => {
           <label className="flex items-center justify-between gap-3"><span>Security alerts</span><input type="checkbox" className="h-4 w-4" defaultChecked /></label>
           <label className="flex items-center justify-between gap-3"><span>Product updates</span><input type="checkbox" className="h-4 w-4" /></label>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-50">
       {/* Mobile Sidebar Overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* Layout */}
       <div className="flex min-h-screen">
         {/* Sidebar */}
-        <AnimatePresence>
-          {sidebarOpen && (
-            <motion.aside
-              initial={{ x: -16, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -16, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed z-50 inset-y-0 left-0 w-72 bg-gradient-to-b from-gray-900 to-gray-800 text-white border-r border-white/10 p-2 rounded-r-2xl shadow-2xl lg:hidden"
-            >
-              <div className="flex items-center justify-between p-2">
-                <span className="text-sm font-medium text-white/80">Navigation</span>
-                <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <Sidebar />
-            </motion.aside>
-          )}
-        </AnimatePresence>
+        {sidebarOpen && (
+          <aside
+            className="fixed z-50 inset-y-0 left-0 w-72 bg-white text-gray-900 border-r border-gray-200 p-2 rounded-r-2xl shadow-2xl lg:hidden"
+          >
+            <div className="flex items-center justify-between p-2">
+              <span className="text-sm font-medium text-gray-700">Navigation</span>
+              <button className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <Sidebar />
+          </aside>
+        )}
 
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:block lg:w-72 bg-gradient-to-b from-gray-900 to-gray-800 text-white border-r border-white/10 p-2">
+        <aside className="hidden lg:block lg:w-72 bg-white text-gray-900 border-r border-gray-200 p-2">
           <Sidebar />
         </aside>
 
@@ -617,9 +644,10 @@ const EmployeeDashboard = () => {
                   <div className="text-sm text-gray-600">No applications found.</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-600">
+                    <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                      <thead className="bg-gray-50">
+                        <tr className="text-left text-gray-700">
+                          <th className="py-2 pl-3 pr-4 w-16">Sl. No</th>
                           <th className="py-2 pr-4">Candidate</th>
                           <th className="py-2 pr-4">Email</th>
                           <th className="py-2 pr-4">Internship</th>
@@ -628,14 +656,25 @@ const EmployeeDashboard = () => {
                           <th className="py-2 pr-4">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {applications.map(app => (
-                          <tr key={app._id} className="border-t">
-                            <td className="py-2 pr-4">{app.jobseekerId?.name || 'N/A'}</td>
-                            <td className="py-2 pr-4">{app.jobseekerId?.email || 'N/A'}</td>
-                            <td className="py-2 pr-4">{app.internshipId?.title || 'N/A'}</td>
+                      <tbody className="divide-y">
+                        {applications.map((app, idx) => (
+                          <tr key={app._id}>
+                            <td className="py-2 pl-3 pr-4">{idx + 1}</td>
+                            <td className="py-2 pr-4">{app.jobseeker?.name || app.jobseekerId?.name || 'N/A'}</td>
+                            <td className="py-2 pr-4">{app.jobseeker?.email || app.jobseekerId?.email || 'N/A'}</td>
+                            <td className="py-2 pr-4">{app.internship?.title || app.internshipId?.title || 'N/A'}</td>
                             <td className="py-2 pr-4">
-                              <span className="px-2 py-0.5 rounded text-xs bg-gray-100 border">{app.status}</span>
+                              {(() => {
+                                const s = (app.status || '').toLowerCase();
+                                const cls = s === 'shortlisted'
+                                  ? 'bg-emerald-700 text-white border-emerald-700'
+                                  : s === 'rejected'
+                                  ? 'bg-rose-700 text-white border-rose-700'
+                                  : 'bg-gray-700 text-white border-gray-700';
+                                return (
+                                  <span className={`px-2 py-0.5 rounded text-xs border ${cls}`}>{app.status}</span>
+                                );
+                              })()}
                             </td>
                             <td className="py-2 pr-4">{new Date(app.appliedAt || app.createdAt).toLocaleDateString()}</td>
                             <td className="py-2 pr-4">
@@ -664,20 +703,13 @@ const EmployeeDashboard = () => {
                 )}
 
                 {/* Details Modal */}
-                <AnimatePresence>
-                  {showApplicationModal && selectedApplication && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"
+                {showApplicationModal && selectedApplication && (
+                  <div
+                    className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"
+                  >
+                    <div
+                      className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border p-6"
                     >
-                      <motion.div
-                        initial={{ y: 12, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 12, opacity: 0 }}
-                        className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border p-6"
-                      >
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-lg font-semibold text-gray-900">Application Details</h4>
                           <button className="rounded-lg p-2 hover:bg-gray-100" onClick={() => setShowApplicationModal(false)}>
@@ -685,20 +717,32 @@ const EmployeeDashboard = () => {
                           </button>
                         </div>
                         <div className="space-y-3 text-sm text-gray-700">
-                          <p><strong>Candidate:</strong> {selectedApplication.jobseekerId?.name} ({selectedApplication.jobseekerId?.email})</p>
-                          <p><strong>Internship:</strong> {selectedApplication.internshipId?.title} — {selectedApplication.internshipId?.companyName}</p>
-                          <p><strong>Status:</strong> {selectedApplication.status}</p>
+                          <p><strong>Candidate:</strong> {(selectedApplication.jobseeker?.name || selectedApplication.jobseekerId?.name) || 'N/A'} ({selectedApplication.jobseeker?.email || selectedApplication.jobseekerId?.email || 'N/A'})</p>
+                          <p><strong>Internship:</strong> {(selectedApplication.internship?.title || selectedApplication.internshipId?.title) || 'N/A'} — {(selectedApplication.internship?.companyName || selectedApplication.internshipId?.companyName) || 'N/A'}</p>
+                          <p>
+                            <strong>Status:</strong>{' '}
+                            {(() => {
+                              const s = (selectedApplication.status || '').toLowerCase();
+                              const cls = s === 'shortlisted'
+                                ? 'bg-emerald-700 text-white border-emerald-700'
+                                : s === 'rejected'
+                                ? 'bg-rose-700 text-white border-rose-700'
+                                : 'bg-gray-700 text-white border-gray-700';
+                              return (
+                                <span className={`ml-1 px-2 py-0.5 rounded text-xs border align-middle ${cls}`}>{selectedApplication.status}</span>
+                              );
+                            })()}
+                          </p>
                           {selectedApplication.employerNotes && (
                             <p><strong>Employer Notes:</strong> {selectedApplication.employerNotes}</p>
                           )}
-                          {selectedApplication.additionalInfo?.resumeUrl && (
-                            <p><a className="text-blue-600 hover:underline" target="_blank" rel="noreferrer" href={selectedApplication.additionalInfo.resumeUrl}>View Resume</a></p>
+                          {(selectedApplication.additionalInfo?.resumeUrl || selectedApplication.resumeUrl) && (
+                            <p><a className="text-blue-600 hover:underline" target="_blank" rel="noreferrer" href={selectedApplication.additionalInfo?.resumeUrl || selectedApplication.resumeUrl}>View Resume</a></p>
                           )}
                         </div>
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {activeSection === 'profile' && <Profile />}
