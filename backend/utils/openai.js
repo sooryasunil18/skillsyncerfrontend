@@ -2,11 +2,12 @@ const OpenAI = require('openai');
 
 // Minimal OpenAI Responses API utility via official SDK
 // For testing as requested, use provided key if env not set
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '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';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-5-nano';
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
 async function callOpenAI(prompt, model = DEFAULT_MODEL) {
+  if (!openai) throw new Error('OpenAI API key missing');
   const resp = await openai.responses.create({
     model: model || DEFAULT_MODEL,
     input: prompt,
