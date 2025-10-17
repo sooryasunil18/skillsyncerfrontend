@@ -194,8 +194,60 @@ const InternshipApplicationSchema = new mongoose.Schema({
   // Application Status and Tracking
   status: {
     type: String,
-    enum: ['pending', 'reviewed', 'shortlisted', 'rejected', 'accepted', 'withdrawn'],
+    enum: [
+      'pending',
+      'reviewed',
+      'shortlisted',
+      'rejected',
+      // Extended statuses for tests and onboarding workflow
+      'test-assigned',
+      'selected',
+      'active',
+      'completed',
+      'withdrawn'
+    ],
     default: 'pending'
+  },
+
+  // Test workflow fields
+  testLink: {
+    type: String,
+    default: null
+  },
+  testExpiry: {
+    type: Date,
+    default: null
+  },
+  result: {
+    type: String,
+    enum: ['Passed', 'Failed', null],
+    default: null
+  },
+  reason: {
+    type: String,
+    default: null
+  },
+  score: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: null
+  },
+  answers: {
+    type: Array,
+    default: []
+  },
+
+  // Mentor and internship mode selections
+  mentorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  internshipMode: {
+    type: String,
+    enum: ['Online', 'Offline', 'Hybrid', null],
+    default: null
   },
 
   // Automated matching results

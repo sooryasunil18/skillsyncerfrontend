@@ -18,6 +18,7 @@ import MentorDashboard from './pages/MentorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import TestScreen from './pages/TestScreen';
 import Footer from './components/Footer';
 
 // Layout component to conditionally render navbar and footer
@@ -25,16 +26,17 @@ function Layout() {
   const location = useLocation();
 
   // Define routes that should NOT show the navbar and footer (dashboard routes)
-  const dashboardRoutes = [
+  const dashboardBases = [
     '/jobseeker-dashboard',
     '/employer-dashboard',
     '/mentor-dashboard',
     '/employee-dashboard',
     '/admin-dashboard',
     '/admin-login',
-    '/settings'
+    '/settings',
+    '/test'
   ];
-  const isDashboardRoute = dashboardRoutes.includes(location.pathname);
+  const isDashboardRoute = dashboardBases.some(base => location.pathname === base || location.pathname.startsWith(base + '/'));
 
   return (
     <div className="min-h-screen bg-white">
@@ -52,8 +54,10 @@ function Layout() {
           <Route path="/employer-info" element={<EmployerInfo />} />
           <Route path="/jobseeker-dashboard" element={<JobseekerDashboard />} />
           <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+          <Route path="/employer-dashboard/:section" element={<EmployerDashboard />} />
           <Route path="/mentor-dashboard" element={<MentorDashboard />} />
           <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
+          <Route path="/test/:token" element={<TestScreen />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/settings" element={<Settings />} />

@@ -133,6 +133,10 @@ export const jobseekerApi = {
   getApplications: () => apiRequest('/api/jobseeker/applications'),
   
   getDetailedApplications: () => apiRequest('/api/jobseeker/applications-detailed'),
+  deleteApplication: (applicationId) => apiRequest(`/api/jobseeker/applications/${encodeURIComponent(applicationId)}`, { method: 'DELETE' }),
+
+  // Status sync for tests and selections
+  getStatus: () => apiRequest('/api/jobseekers/status'),
   
   // Profile management
   getProfile: () => apiRequest('/api/jobseeker/profile'),
@@ -189,6 +193,17 @@ export const employerApi = {
     method: 'PATCH',
     body: JSON.stringify({ status, notes }),
   }),
+
+  // Assign online test to shortlisted application
+  assignTest: (applicationId, expiresInHours = 24) => apiRequest('/api/tests/assign', {
+    method: 'POST',
+    body: JSON.stringify({ applicationId, expiresInHours }),
+  }),
+  
+  resetTest: (applicationId) => apiRequest('/api/tests/reset', {
+    method: 'POST',
+    body: JSON.stringify({ applicationId }),
+  }),
   
   // Dropdown data
   getInternshipTitles: (industry) => apiRequest(`/api/employer/internship-titles${industry ? `?industry=${encodeURIComponent(industry)}` : ''}`),
@@ -213,3 +228,16 @@ export const employerApi = {
 };
 
 export const healthCheck = () => apiRequest('/api/health');
+
+// Tests API (for client-side submission flows if needed)
+export const testsApi = {
+  get: (token) => apiRequest(`/api/tests/${encodeURIComponent(token)}`),
+  submit: (token, answers) => apiRequest('/api/tests/submit', {
+    method: 'POST',
+    body: JSON.stringify({ token, answers })
+  }),
+  preview: (title, skills = [], model, provider = 'gemini') => apiRequest('/api/tests/preview', {
+    method: 'POST',
+    body: JSON.stringify({ title, skills, model, provider })
+  })
+};

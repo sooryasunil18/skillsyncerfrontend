@@ -203,9 +203,13 @@ InternshipPostingSchema.pre('save', function(next) {
 
 // Method to check if posting is still accepting applications
 InternshipPostingSchema.methods.isAcceptingApplications = function() {
-  return this.status === 'active' && 
-         this.availableSeats > 0 && 
-         new Date() <= this.lastDateToApply;
+  if (this.status !== 'active' || this.availableSeats <= 0) return false;
+  const now = new Date();
+  const last = new Date(this.lastDateToApply);
+  // Allow applications until 23:59:59.999 of the lastDateToApply
+  const endOfLastDate = new Date(last);
+  endOfLastDate.setHours(23, 59, 59, 999);
+  return now <= endOfLastDate;
 };
 
 // Method to apply for internship
@@ -241,7 +245,8 @@ InternshipPostingSchema.statics.getAvailableInternships = function(filters = {})
   const query = {
     status: 'active',
     availableSeats: { $gt: 0 },
-    lastDateToApply: { $gte: new Date() }
+    // Include postings whose lastDateToApply is today or in the future
+    lastDateToApply: { $gte: (function(){ const d=new Date(); d.setHours(0,0,0,0); return d; })() }
   };
   
   // Apply additional filters

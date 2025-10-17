@@ -7,7 +7,8 @@ const InternshipApplication = require('../models/InternshipApplication');
 const { protect, authorize } = require('../middleware/auth');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
 const { updateProfileATSScore, generateATSSuggestions } = require('../utils/atsScoring');
-const { extractText, extractEntities } = require('../utils/resumeParser');
+const { sendShortlistEmail, sendRejectionEmail } = require('../utils/emailService');
+const { extractText, extractEntities, isLikelyResume } = require('../utils/resumeParser');
 const { analyzeAndSaveNLP, computeNLPScore } = require('../utils/atsScoringNLP');
 
 const router = express.Router();
@@ -843,7 +844,22 @@ router.post('/upload-resume', upload.single('resume'), async (req, res) => {
       });
     }
 
-    // Upload to Cloudinary
+    // Extract text first to validate resume before uploading to Cloudinary
+    let parsedText = '';
+    try {
+      parsedText = await extractText(req.file.buffer, req.file.mimetype);
+    } catch (e) {
+      console.warn('Resume text extraction failed:', e.message);
+    }
+
+    if (!isLikelyResume(parsedText)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload a valid resume (include contact, education, experience/projects, and skills)'
+      });
+    }
+
+    // Upload to Cloudinary (after validation)
     const uploadResult = await uploadToCloudinary(
       req.file.buffer,
       'resumes',
@@ -880,13 +896,7 @@ router.post('/upload-resume', upload.single('resume'), async (req, res) => {
     profile.resumeUrl = uploadResult.url;
     await profile.save();
 
-    // Parse resume text and extract entities (OCR + NLP)
-    let parsedText = '';
-    try {
-      parsedText = await extractText(req.file.buffer, req.file.mimetype);
-    } catch (e) {
-      console.warn('Resume text extraction failed:', e.message);
-    }
+    // We already have parsedText; proceed to extract entities
     const extracted = extractEntities(parsedText);
 
     // Save NLP analysis and compute NLP ATS, keep previous snapshot for comparison
@@ -1105,7 +1115,20 @@ router.get('/internships', async (req, res) => {
       benefits: internship.benefits,
       postedAt: internship.postedAt,
       isAcceptingApplications: internship.isAcceptingApplications(),
-      daysLeftToApply: Math.ceil((new Date(internship.lastDateToApply) - new Date()) / (1000 * 60 * 60 * 24))
+      // Final day flag: if today is the last application date
+      isFinalDay: (function(){
+        const now=new Date();
+        const last=new Date(internship.lastDateToApply);
+        const start=new Date(last); start.setHours(0,0,0,0);
+        const end=new Date(last); end.setHours(23,59,59,999);
+        return now>=start && now<=end;
+      })(),
+      // Keep legacy field but compute against end-of-day
+      daysLeftToApply: (function(){
+        const now=new Date();
+        const end=new Date(internship.lastDateToApply); end.setHours(23,59,59,999);
+        const diff=end-now; return Math.ceil(diff / (1000*60*60*24));
+      })()
     }));
 
     res.json({
@@ -1252,7 +1275,7 @@ router.post('/internships/:id/apply', async (req, res) => {
     const criteria = extractPostingCriteria(internship);
     const applicant = extractApplicant(profile || {});
     const { score, matched, unmatched } = computeMatchScore(criteria, applicant);
-    const decision = decideAction(score, 80);
+    const decision = decideAction(score, 55);
 
     const application = new InternshipApplication({
       internshipId: internship._id,
@@ -1297,7 +1320,7 @@ router.post('/internships/:id/apply', async (req, res) => {
         informationTruthful: true,
         consentToShare: true
       },
-      status: decision === 'Proceed to Recruiter' ? 'reviewed' : 'rejected',
+      status: decision === 'Proceed to Recruiter' ? 'shortlisted' : 'rejected',
       matchScore: score,
       matching: { matched, unmatched },
       decision,
@@ -1305,6 +1328,30 @@ router.post('/internships/:id/apply', async (req, res) => {
     });
 
     await application.save();
+
+    // Fire-and-forget notification email to jobseeker based on auto-decision
+    try {
+      const companyName = internship.companyName || 'Our Company';
+      const internshipTitle = internship.title || 'Internship';
+      const toEmail = req.user.email;
+      const toName = req.user.name || 'Candidate';
+      if (decision === 'Proceed to Recruiter') {
+        // Shortlisted template
+        await sendShortlistEmail(toEmail, toName, companyName, internshipTitle);
+      } else if (decision === 'Auto-Rejected') {
+        // Rejected template as requested
+        const subject = 'Internship Application Status – Rejected';
+        const message = `
+          <p>Dear ${toName},</p>
+          <p>We regret to inform you that your internship application has been auto-rejected. Thank you for your interest in joining <strong>${companyName}</strong>. We encourage you to apply for future opportunities that match your skills and experience.</p>
+          <p>Best regards,<br/>${companyName} Team</p>
+        `;
+        const { sendNotificationEmail } = require('../utils/emailService');
+        await sendNotificationEmail(toEmail, subject, message);
+      }
+    } catch (emailErr) {
+      console.error('Auto-decision email error (apply):', emailErr.message);
+    }
 
     // Maintain backward compatibility array on posting
     internship.applications.push({
@@ -1355,13 +1402,15 @@ router.get('/applications', async (req, res) => {
         app => app.jobseekerId.toString() === req.user._id.toString()
       );
       
+      const normalizedStatus = (application.status === 'reviewed' && application.decision === 'Proceed to Recruiter') ? 'shortlisted' : application.status;
+
       return {
         _id: application._id,
         internshipId: internship._id,
         title: internship.title,
         companyName: internship.companyName || (internship.employerId?.company?.name || internship.employerId?.name || 'Company'),
         appliedAt: application.appliedAt,
-        status: application.status,
+        status: normalizedStatus,
         coverLetter: application.coverLetter,
         resumeUrl: application.resumeUrl,
         internship: {
@@ -1461,15 +1510,30 @@ router.post('/internships/:id/apply-detailed', async (req, res) => {
     const criteria = extractPostingCriteria(internship);
     const applicant = extractApplicant(profile || {});
     const { score, matched, unmatched } = computeMatchScore(criteria, applicant);
-    const decision = decideAction(score, 80);
+    const decision = decideAction(score, 55);
 
     application.matchScore = score;
     application.matching = { matched, unmatched };
     application.decision = decision;
-    application.status = decision === 'Proceed to Recruiter' ? 'reviewed' : 'rejected';
+    application.status = decision === 'Proceed to Recruiter' ? 'shortlisted' : 'rejected';
     application.summary = buildSummary(req.user.name, score, matched, unmatched);
 
     await application.save();
+
+    // Fire-and-forget notification email to jobseeker based on auto-decision (detailed)
+    try {
+      const companyName = internship.companyName || 'Our Company';
+      const internshipTitle = internship.title || 'Internship';
+      const toEmail = req.user.email;
+      const toName = req.user.name || 'Candidate';
+      if (decision === 'Proceed to Recruiter') {
+        await sendShortlistEmail(toEmail, toName, companyName, internshipTitle);
+      } else if (decision === 'Auto-Rejected') {
+        await sendRejectionEmail(toEmail, toName, companyName, internshipTitle);
+      }
+    } catch (emailErr) {
+      console.error('Auto-decision email error (apply-detailed):', emailErr.message);
+    }
 
     // Also add to the internship's applications array for backward compatibility
     internship.applications.push({
@@ -1531,6 +1595,44 @@ router.get('/applications-detailed', async (req, res) => {
       success: false,
       message: 'Server error while fetching applications'
     });
+  }
+});
+
+// @desc    Delete a jobseeker's application (and related artifacts)
+// @route   DELETE /api/jobseeker/applications/:applicationId
+// @access  Private (Jobseeker only)
+router.delete('/applications/:applicationId', async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const application = await InternshipApplication.findById(applicationId);
+    if (!application) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+    if (application.jobseekerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this application' });
+    }
+
+    // Remove legacy entry from InternshipPosting.applications array if present
+    try {
+      await InternshipPosting.updateOne(
+        { _id: application.internshipId },
+        { $pull: { applications: { jobseekerId: application.jobseekerId } } }
+      );
+    } catch (_) {}
+
+    // Delete any assigned tests for this application
+    try {
+      const Test = require('../models/Test');
+      await Test.deleteMany({ applicationId: application._id });
+    } catch (_) {}
+
+    // Delete the application
+    await application.deleteOne();
+
+    return res.json({ success: true, message: 'Application deleted successfully' });
+  } catch (err) {
+    console.error('Delete application error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete application' });
   }
 });
 

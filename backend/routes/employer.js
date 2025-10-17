@@ -560,10 +560,18 @@ router.get('/applications-detailed', protect, async (req, res) => {
       effectiveEmployerId = companyId;
     }
     
-    const applications = await InternshipApplication.getApplicationsForEmployer(
+    let applications = await InternshipApplication.getApplicationsForEmployer(
       effectiveEmployerId,
       { status, internshipId }
     );
+
+    // Normalize legacy statuses before returning
+    applications = applications.map(app => {
+      if (app.status === 'reviewed' && app.decision === 'Proceed to Recruiter') {
+        app.status = 'shortlisted';
+      }
+      return app;
+    });
 
     // Paginate results
     const startIndex = (page - 1) * limit;
@@ -579,6 +587,11 @@ router.get('/applications-detailed', protect, async (req, res) => {
       summary: app.summary,
       appliedAt: app.appliedAt,
       createdAt: app.createdAt,
+      // Test fields for recruiter visibility
+      answers: Array.isArray(app.answers) ? app.answers : [],
+      score: typeof app.score === 'number' ? app.score : null,
+      result: app.result || null,
+      reason: app.reason || null,
       personalDetails: app.personalDetails,
       educationDetails: app.educationDetails,
       workExperience: app.workExperience,
@@ -660,6 +673,11 @@ router.get('/applications-detailed/:id', protect, async (req, res) => {
         success: false,
         message: 'Application not found'
       });
+    }
+
+    // Normalize legacy status for single fetch as well
+    if (application.status === 'reviewed' && application.decision === 'Proceed to Recruiter') {
+      application.status = 'shortlisted';
     }
 
     res.json({

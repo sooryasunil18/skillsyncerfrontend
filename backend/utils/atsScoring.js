@@ -38,12 +38,20 @@ const calculateATSScore = async (profile) => {
     let score = 0;
     const maxScore = 100;
 
+    // Merge explicit profile skills with NLP-extracted skills for better coverage
+    const nlpSkills = (profile?.nlp?.extracted?.skills || []).map((s) => String(s));
+    const combinedSkills = Array.from(new Set([...(profile.skills || []), ...nlpSkills]));
+
+    // Prefer NLP education if available
+    const nlpEducation = Array.isArray(profile?.nlp?.extracted?.education) ? profile.nlp.extracted.education : [];
+    const educationForScoring = (profile.education && profile.education.length) ? profile.education : nlpEducation;
+
     // 1. Skills Analysis (30 points)
-    const skillsScore = analyzeSkills(profile.skills || []);
+    const skillsScore = analyzeSkills(combinedSkills);
     score += skillsScore;
 
     // 2. Education Analysis (25 points)
-    const educationScore = analyzeEducation(profile.education || []);
+    const educationScore = analyzeEducation(educationForScoring || []);
     score += educationScore;
 
     // 3. Resume Presence (25 points)

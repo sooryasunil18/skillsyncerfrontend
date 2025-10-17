@@ -173,19 +173,21 @@ const sendWelcomeEmail = async (userEmail, userName, userRole) => {
   }
 };
 
-// Send shortlist notification email to jobseeker
+// Send shortlist notification email to jobseeker (now matches requested template)
 const sendShortlistEmail = async (toEmail, toName, companyName, internshipTitle, nextSteps = '') => {
   try {
     const transporter = createTransporter();
 
-    const subject = `You’ve been shortlisted for ${internshipTitle} at ${companyName}`;
+    const subject = 'Internship Application Status – Shortlisted';
     const messageHtml = `
       <p>Dear ${toName},</p>
-      <p>We’re pleased to inform you that you have been <strong>shortlisted</strong> for the <strong>${internshipTitle}</strong> opportunity at <strong>${companyName}</strong>.</p>
-      ${nextSteps ? `<p><strong>Next steps:</strong> ${nextSteps}</p>` : ''}
-      <p>Our team will reach out with further details soon. In the meantime, you can view your application status from your dashboard:</p>
-      <p><a href="${process.env.FRONTEND_URL}/dashboard" target="_blank" rel="noopener">Go to your dashboard</a></p>
-      <p>Congratulations and best of luck for the next round!</p>
+      <p>Congratulations! Your internship application has been <strong>shortlisted</strong>.</p>
+      <p>You are required to complete a test as the next step in the selection process. Please log in to your account to find the test details.</p>
+      <p><a href="${process.env.FRONTEND_URL}/jobseeker-dashboard" target="_blank" rel="noopener">Go to your account</a></p>
+      <p>If you pass the test, you will be selected for the internship.</p>
+      <p>If you do not pass, your application will be rejected.</p>
+      <p>We wish you the best of luck!</p>
+      <p>Best regards,<br>${companyName} Team</p>
     `;
 
     const mailOptions = {
@@ -194,11 +196,11 @@ const sendShortlistEmail = async (toEmail, toName, companyName, internshipTitle,
       subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333; text-align: center;">Shortlist Notification</h2>
+      <h2 style="color: #333; text-align: center;">Internship Application Status – Shortlisted</h2>
           <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
             ${messageHtml}
           </div>
-          <p>Best regards,<br/>${companyName} & SkillSyncer Team</p>
+      <p>Best regards,<br/>${companyName} & SkillSyncer Team</p>
         </div>
       `
     };

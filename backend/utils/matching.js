@@ -122,7 +122,7 @@ function computeMatchScore(criteria, applicant) {
   return { score: total, matched, unmatched };
 }
 
-function decideAction(score, threshold = 80) {
+function decideAction(score, threshold = 55) {
   return score >= threshold ? 'Proceed to Recruiter' : 'Auto-Rejected';
 }
 

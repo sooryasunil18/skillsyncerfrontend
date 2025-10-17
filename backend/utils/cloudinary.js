@@ -30,7 +30,7 @@ const uploadToCloudinary = async (fileBuffer, folder = 'resumes', publicId = nul
   try {
     const uploadOptions = {
       folder,
-      resource_type: 'auto'
+      resource_type: folder === 'employee-id-cards' ? 'image' : 'raw'
     };
 
     // Set allowed formats based on folder type
@@ -42,12 +42,9 @@ const uploadToCloudinary = async (fileBuffer, folder = 'resumes', publicId = nul
         { fetch_format: 'auto' }
       ];
     } else {
-      // For resumes and other documents
+      // For resumes and other documents, treat as raw assets
       uploadOptions.allowed_formats = ['pdf', 'doc', 'docx'];
-      uploadOptions.transformation = [
-        { quality: 'auto' },
-        { fetch_format: 'auto' }
-      ];
+      // No image transformations for raw uploads
     }
 
     if (publicId) uploadOptions.public_id = publicId;

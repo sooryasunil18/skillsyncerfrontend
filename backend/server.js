@@ -56,6 +56,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Gemini startup probe
+(async () => {
+  try {
+    const { healthCheck } = require('./utils/gemini');
+    const result = await healthCheck();
+    if (result.ok) {
+      console.log('✅ Gemini API configured successfully. Sample:', result.sample);
+    } else {
+      console.warn('⚠️ Gemini API health check failed:', result.error || 'Unknown error');
+    }
+  } catch (e) {
+    console.warn('⚠️ Gemini health check not executed:', e.message);
+  }
+})();
+
 // Connect to MongoDB
 const connectDB = async () => {
   try {
@@ -86,7 +101,7 @@ const connectDB = async () => {
 connectDB();
 
 // Import routes after ensuring modules are loaded
-let authRoutes, jobseekerRoutes, adminRoutes, employerRoutes, companiesRoutes, mentorRoutes;
+let authRoutes, jobseekerRoutes, adminRoutes, employerRoutes, companiesRoutes, mentorRoutes, testsRoutes, internshipApplicationsRoutes, jobseekerStatusRoutes;
 
 try {
   authRoutes = require('./routes/auth');
@@ -114,6 +129,27 @@ try {
   console.log('✅ Employer routes loaded');
 } catch (error) {
   console.error('❌ Error loading employer routes:', error.message);
+}
+
+try {
+  testsRoutes = require('./routes/tests');
+  console.log('✅ Tests routes loaded');
+} catch (error) {
+  console.error('❌ Error loading tests routes:', error.message);
+}
+
+try {
+  internshipApplicationsRoutes = require('./routes/internshipapplications');
+  console.log('✅ InternshipApplications routes loaded');
+} catch (error) {
+  console.error('❌ Error loading internshipapplications routes:', error.message);
+}
+
+try {
+  jobseekerStatusRoutes = require('./routes/jobseeker_status');
+  console.log('✅ Jobseeker status routes loaded');
+} catch (error) {
+  console.error('❌ Error loading jobseeker status routes:', error.message);
 }
 
 try {
@@ -157,6 +193,27 @@ if (employerRoutes) {
   console.log('✅ Employer routes registered');
 } else {
   console.log('⚠️  Employer routes not available');
+}
+
+if (testsRoutes) {
+  app.use('/api/tests', testsRoutes);
+  console.log('✅ Tests routes registered');
+} else {
+  console.log('⚠️  Tests routes not available');
+}
+
+if (internshipApplicationsRoutes) {
+  app.use('/api/internshipapplications', internshipApplicationsRoutes);
+  console.log('✅ InternshipApplications routes registered');
+} else {
+  console.log('⚠️  InternshipApplications routes not available');
+}
+
+if (jobseekerStatusRoutes) {
+  app.use('/api/jobseekers', jobseekerStatusRoutes);
+  console.log('✅ Jobseeker status routes registered');
+} else {
+  console.log('⚠️  Jobseeker status routes not available');
 }
 
 if (companiesRoutes) {

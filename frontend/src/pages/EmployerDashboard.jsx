@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useParams, useLocation } from 'react-router-dom';
 import InternshipPostingForm from '../components/InternshipPostingForm';
 import MentorRequestForm from '../components/MentorRequestForm';
-import { employerApi } from '../utils/api';
+import { employerApi, testsApi } from '../utils/api';
+import EmployerDashboardOverview from './employer/EmployerDashboardOverview';
+import EmployerApplications from './employer/EmployerApplications';
+import EmployerInternships from './employer/EmployerInternships';
+import EmployerEmployees from './employer/EmployerEmployees';
+import EmployerCompanyProfile from './employer/EmployerCompanyProfile';
+import EmployerMentorRequests from './employer/EmployerMentorRequests';
 import { API_BASE_URL } from '../config/api';
 import {
   Users,
@@ -109,6 +115,8 @@ class ErrorBoundary extends React.Component {
 }
 
 const EmployerDashboard = () => {
+  const { section } = useParams();
+  const location = useLocation();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -137,6 +145,7 @@ const EmployerDashboard = () => {
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusUpdateData, setStatusUpdateData] = useState({ applicationId: null, newStatus: '', notes: '' });
+  const [assigningTest, setAssigningTest] = useState(false);
   const [showMentorRequestForm, setShowMentorRequestForm] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -154,6 +163,27 @@ const EmployerDashboard = () => {
   const profileMenuRef = React.useRef(null);
   
   const navigate = useNavigate();
+
+  // Sync active section with URL param on mount and when URL changes
+  useEffect(() => {
+    if (section && section !== activeSection) {
+      setActiveSection(section);
+    }
+    if (!section && activeSection !== 'dashboard') {
+      setActiveSection('dashboard');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
+
+  // Push URL when activeSection changes (keeps deep links addressable)
+  useEffect(() => {
+    const targetPath = activeSection === 'dashboard'
+      ? '/employer-dashboard'
+      : `/employer-dashboard/${activeSection}`;
+    if (location.pathname !== targetPath) {
+      navigate(targetPath, { replace: false });
+    }
+  }, [activeSection, location.pathname, navigate]);
 
   useEffect(() => {
     const initializeDashboard = async () => {
@@ -616,6 +646,48 @@ const EmployerDashboard = () => {
     setStatusUpdateData({ applicationId: null, newStatus: '', notes: '' });
   };
 
+  // Assign test to shortlisted application
+  const assignTest = async (applicationId) => {
+    try {
+      setAssigningTest(true);
+      const resp = await employerApi.assignTest(applicationId, 24);
+      if (resp.success) {
+        setSuccessMessage('Test assigned successfully');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        loadApplications();
+      } else {
+        setError(resp.data?.message || resp.message || 'Failed to assign test');
+        setTimeout(() => setError(null), 5000);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to assign test');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setAssigningTest(false);
+    }
+  };
+
+  // Reset failed test to allow retaking
+  const resetTest = async (applicationId) => {
+    try {
+      setAssigningTest(true);
+      const resp = await employerApi.resetTest(applicationId);
+      if (resp.success) {
+        setSuccessMessage('Test reset successfully. You can now assign a new test.');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        loadApplications();
+      } else {
+        setError(resp.data?.message || resp.message || 'Failed to reset test');
+        setTimeout(() => setError(null), 5000);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to reset test');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setAssigningTest(false);
+    }
+  };
+
   // View full application details
   const viewApplicationDetails = async (applicationId) => {
     try {
@@ -730,1000 +802,168 @@ const EmployerDashboard = () => {
     return 'Good Evening';
   };
 
+  function GenerateQuestionsPreview() {
+    const [title, setTitle] = React.useState('Software Developer Intern');
+    const [skills, setSkills] = React.useState('JavaScript, Node.js, MongoDB, REST');
+    const [loadingPreview, setLoadingPreview] = React.useState(false);
+    const [preview, setPreview] = React.useState(null);
+    const [errorPreview, setErrorPreview] = React.useState('');
+    const [modelUsed, setModelUsed] = React.useState('');
+    const [providerUsed, setProviderUsed] = React.useState('');
+    // Provider fixed to 'openai' for testing
+    const [provider, setProvider] = React.useState('openai');
+    // Gemini dropdown (common public models)
+    const geminiModels = [
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ];
+    const [geminiModel, setGeminiModel] = React.useState(geminiModels[0]);
+    // Hugging Face accepts a free-form model id (e.g. meta-llama/Meta-Llama-3-8B-Instruct)
+    const [hfModelId, setHfModelId] = React.useState('microsoft/Phi-3-mini-4k-instruct');
+
+    const onGenerate = async () => {
+      setErrorPreview('');
+      setPreview(null);
+      try {
+        setLoadingPreview(true);
+        const skillArr = skills.split(',').map(s => s.trim()).filter(Boolean);
+        const chosenModel = provider === 'gemini' ? geminiModel : hfModelId;
+        const res = await testsApi.preview(title, skillArr, chosenModel, provider);
+        if (res.success && res.data?.success) {
+          setPreview(res.data.data.questions || []);
+          setModelUsed(res.data.data.model || '');
+          setProviderUsed(res.data.data.provider || provider);
+        } else {
+          setErrorPreview(res.data?.message || 'Failed to generate');
+        }
+      } catch (e) {
+        setErrorPreview(e.message || 'Failed to generate');
+      } finally {
+        setLoadingPreview(false);
+      }
+    };
+
+    return (
+      <div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <input value={title} onChange={(e)=>setTitle(e.target.value)} className="border rounded-lg p-3" placeholder="Internship title" />
+          <input value={skills} onChange={(e)=>setSkills(e.target.value)} className="border rounded-lg p-3" placeholder="Comma separated skills (optional)" />
+          <div className="flex gap-2">
+            <input value={hfModelId} onChange={(e)=>setHfModelId(e.target.value)} className="border rounded-lg p-3 w-1/2" placeholder="openai model (e.g. gpt-4o-mini)" />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={onGenerate} disabled={loadingPreview} className="px-4 py-2 bg-indigo-600 text-white rounded-lg disabled:opacity-50">{loadingPreview ? 'Generating...' : 'Generate'}</button>
+          <button onClick={()=>{setPreview(null); setErrorPreview('');}} className="px-4 py-2 border rounded-lg">Clear</button>
+        </div>
+        {errorPreview && <p className="mt-3 text-sm text-red-600">{errorPreview}</p>}
+        {Array.isArray(preview) && preview.length > 0 && (
+          <div className="mt-6 space-y-4">
+            {(modelUsed || providerUsed) && <p className="text-xs text-gray-500">Provider: {providerUsed || provider} • Model: {modelUsed}</p>}
+            {preview.map((q, idx) => (
+              <div key={idx} className="border rounded-lg p-4">
+                <div className="font-medium">Q{idx+1}. {q.q || q.question}</div>
+                {q.type === 'mcq' && (
+                  <ul className="list-disc ml-6 mt-2 text-sm text-gray-700">
+                    {(q.options||[]).map((o, i)=>(<li key={i}>{o}</li>))}
+                  </ul>
+                )}
+                {q.type === 'code' && q.testCases && (
+                  <pre className="bg-gray-50 border rounded p-3 text-xs mt-2 overflow-auto"><code>{q.starterCode || ''}</code></pre>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const navigationItems = [
     { name: 'Dashboard', icon: Home, section: 'dashboard', current: activeSection === 'dashboard' },
     { name: 'Company Profile', icon: Building, section: 'profile', current: activeSection === 'profile' },
     { name: 'Internship Postings', icon: Plus, section: 'internships', current: activeSection === 'internships' },
     { name: 'Applications Received', icon: FileText, section: 'applications', current: activeSection === 'applications' },
     { name: 'Mentor Requests', icon: UserCheck, section: 'mentor-requests', current: activeSection === 'mentor-requests' },
-    { name: 'Employees', icon: Users, section: 'employees', current: activeSection === 'employees' }
+    { name: 'Employees', icon: Users, section: 'employees', current: activeSection === 'employees' },
+    { name: 'Generate Questions', icon: FileText, section: 'generate-questions', current: activeSection === 'generate-questions' }
   ];
 
   const renderSectionContent = () => {
     switch (activeSection) {
-      case 'employees':
+      case 'generate-questions':
         return (
           <div className="space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                  <Users className="w-6 h-6 mr-3 text-blue-600" />
-                  Employees
-                </h2>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={loadEmployees}
-                  disabled={loadingEmployees}
-                  className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingEmployees ? 'animate-spin' : ''}`} />
-                  Refresh
-                </motion.button>
-              </div>
-              {loadingEmployees ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading employees...</p>
-                  </div>
-                </div>
-              ) : employees.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="h-24 w-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Users className="h-12 w-12 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Employees Found</h3>
-                  <p className="text-gray-600">Approved employee requests will appear here.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
-                  <table className="min-w-full text-sm divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr className="text-left text-gray-600">
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Name</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Joined</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {employees.map((emp) => (
-                        <tr key={emp._id} className="hover:bg-gray-50">
-                          <td className="px-6 py-3 whitespace-nowrap text-gray-900 font-medium">{emp.name}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{emp.email}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{emp.createdAt ? new Date(emp.createdAt).toLocaleDateString() : '-'}</td>
-                          <td className="px-6 py-3 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${emp.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                              {emp.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </motion.div>
+            <div className="bg-white rounded-2xl shadow p-6">
+              <h2 className="text-xl font-bold mb-3">Hugging Face Preview: Generate Questions</h2>
+              <p className="text-sm text-gray-600 mb-4">Enter an internship title and generate a temporary question set using HF (default: Phi-3). Nothing is stored.</p>
+              <GenerateQuestionsPreview />
+            </div>
           </div>
+        );
+      case 'employees':
+        return (
+          <EmployerEmployees employees={employees} loadingEmployees={loadingEmployees} reload={loadEmployees} />
         );
       case 'internships':
         return (
-          <div className="space-y-8">
-            {showInternshipForm ? (
-              <InternshipPostingForm
-                onSuccess={handleInternshipSuccess}
-                onCancel={handleInternshipCancel}
-                editData={editingInternship}
-              />
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                    <Plus className="w-6 h-6 mr-3 text-blue-600" />
-                    Manage Internship Postings
-                  </h2>
-                  
-                  <div className="flex items-center space-x-3">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={loadInternships}
-                      disabled={loadingInternships}
-                      className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingInternships ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </motion.button>
-                    
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowInternshipForm(true)}
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                    >
-                      <Plus className="w-4 h-4 inline mr-2" />
-                      Post New Internship
-                    </motion.button>
-                  </div>
-                </div>
-                
-                {/* Success Message Display */}
-                {successMessage && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4"
-                  >
-                    <div className="flex items-center">
-                      <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                      <div>
-                        <h3 className="text-sm font-medium text-green-800">Success</h3>
-                        <p className="text-sm text-green-700 mt-1">{successMessage}</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Error Display */}
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4"
-                  >
-                    <div className="flex items-center">
-                      <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
-                      <div>
-                        <h3 className="text-sm font-medium text-red-800">Error Loading Internships</h3>
-                        <p className="text-sm text-red-700 mt-1">{error}</p>
-                        <button
-                          onClick={loadInternships}
-                          className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-                        >
-                          Try again
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-                
-                {loadingInternships ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p className="text-gray-600">Loading internship postings...</p>
-                    </div>
-                  </div>
-                ) : (!Array.isArray(internships) || internships.length === 0) ? (
-                  <div className="text-center py-12">
-                    <div className="h-24 w-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Plus className="h-12 w-12 text-gray-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Internship Postings Yet</h3>
-                    <p className="text-gray-600 mb-6">Create your first internship posting to start attracting talented interns.</p>
-                    <div className="flex items-center justify-center space-x-3">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setShowInternshipForm(true)}
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                      >
-                        <Plus className="w-4 h-4 inline mr-2" />
-                        Create First Internship
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={loadInternships}
-                        className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                      >
-                        <RefreshCw className="w-4 h-4 inline mr-2" />
-                        Refresh
-                      </motion.button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {Array.isArray(internships) && internships.map((internship, index) => (
-                      <motion.div
-                        key={internship._id || index}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-semibold text-gray-900">{internship.title || 'Untitled Internship'}</h3>
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                internship.status === 'active' ? 'bg-green-100 text-green-800' : 
-                                internship.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
-                                internship.status === 'closed' ? 'bg-red-100 text-red-800' :
-                                internship.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-blue-100 text-blue-800'
-                              }`}>
-                                {internship.status || 'active'}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-6 mb-3 text-sm text-gray-600">
-                              <span className="flex items-center">
-                                <Building className="w-4 h-4 mr-1" />
-                                {internship.companyName || user?.name || 'Company Name'}
-                              </span>
-                              <span className="flex items-center">
-                                <MapPin className="w-4 h-4 mr-1" />
-                                {internship.location || 'Location'}
-                              </span>
-                              <span className="flex items-center">
-                                <Clock className="w-4 h-4 mr-1" />
-                                {internship.duration || 'Duration'}
-                              </span>
-                              <span className="flex items-center">
-                                <Users className="w-4 h-4 mr-1" />
-                                {internship.availableSeats || 0}/{internship.totalSeats || 1} seats
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-4 text-sm text-gray-600">
-                              <span>Industry: {internship.industry || 'Not specified'}</span>
-                              <span>Mode: {internship.mode || 'Not specified'}</span>
-                              <span>Posted: {internship.postedAt ? new Date(internship.postedAt).toLocaleDateString() : 'Recently'}</span>
-                              {internship.applicationsCount > 0 && (
-                                <span className="flex items-center">
-                                  <FileText className="w-4 h-4 mr-1" />
-                                  {internship.applicationsCount} applications
-                                </span>
-                              )}
-                            </div>
-                            {internship.skillsRequired && internship.skillsRequired.length > 0 && (
-                              <div className="flex items-center space-x-2 mt-3">
-                                <span className="text-sm text-gray-600">Skills:</span>
-                                <div className="flex flex-wrap gap-1">
-                                  {internship.skillsRequired.slice(0, 3).map((skill, i) => (
-                                    <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
-                                      {skill}
-                                    </span>
-                                  ))}
-                                  {internship.skillsRequired.length > 3 && (
-                                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                                      +{internship.skillsRequired.length - 3} more
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-2 ml-4">
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              onClick={() => handleViewInternship(internship)}
-                              className="p-2 text-gray-400 hover:text-green-600 transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              onClick={() => handleEditInternship(internship)}
-                              className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                              title="Edit"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              onClick={() => handleDeleteInternship(internship._id)}
-                              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </div>
+          showInternshipForm ? (
+            <InternshipPostingForm onSuccess={handleInternshipSuccess} onCancel={handleInternshipCancel} editData={editingInternship} />
+          ) : (
+            <EmployerInternships
+              internships={internships}
+              loadingInternships={loadingInternships}
+              error={error}
+              successMessage={successMessage}
+              onCreate={() => setShowInternshipForm(true)}
+              onEdit={handleEditInternship}
+              onView={handleViewInternship}
+              onDelete={handleDeleteInternship}
+              setShowInternshipForm={setShowInternshipForm}
+            />
+          )
         );
 
-      case 'post-job':
-        return (
-          <div className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8"
-            >
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <Plus className="w-6 h-6 mr-3 text-blue-600" />
-                Post New Job
-              </h2>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g., Senior Frontend Developer"
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                    <select className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                      <option>Engineering</option>
-                      <option>Design</option>
-                      <option>Product</option>
-                      <option>Marketing</option>
-                      <option>Sales</option>
-                      <option>HR</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Employment Type</label>
-                    <select className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                      <option>Full-time</option>
-                      <option>Part-time</option>
-                      <option>Contract</option>
-                      <option>Internship</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                    <input 
-                      type="text" 
-                      placeholder="San Francisco, CA or Remote"
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Min Salary</label>
-                      <input 
-                        type="number" 
-                        placeholder="80000"
-                        className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Max Salary</label>
-                      <input 
-                        type="number" 
-                        placeholder="120000"
-                        className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Job Description *</label>
-                    <textarea 
-                      rows="6"
-                      placeholder="Describe the role, responsibilities, and what you're looking for..."
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    ></textarea>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
-                    <textarea 
-                      rows="4"
-                      placeholder="List required skills, experience, education..."
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    ></textarea>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Experience Level</label>
-                    <select className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                      <option>Entry Level (0-1 years)</option>
-                      <option>Junior (1-3 years)</option>
-                      <option>Mid Level (3-5 years)</option>
-                      <option>Senior (5-8 years)</option>
-                      <option>Lead (8+ years)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 flex gap-4">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-8 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                >
-                  <CheckCircle className="w-5 h-5 inline mr-2" />
-                  Post Job
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-gray-200 text-gray-700 py-3 px-8 rounded-lg font-medium hover:bg-gray-300 transition-all duration-200"
-                >
-                  Save as Draft
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        );
 
-      case 'jobs':
-        return (
-          <div className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                  <Briefcase className="w-6 h-6 mr-3 text-blue-600" />
-                  Manage Internships
-                </h2>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setActiveSection('post-job')}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-medium shadow-lg"
-                >
-                  <Plus className="w-4 h-4 inline mr-2" />
-                  Post New Internship
-                </motion.button>
-              </div>
-              
-              <div className="space-y-4">
-                {dashboardData?.activeInternshipsList?.map((job, index) => (
-                  <motion.div
-                    key={job.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-200"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900">{job.title}</h3>
-                        <div className="flex items-center space-x-6 mt-2 text-sm text-gray-600">
-                          <span className="flex items-center">
-                            <Eye className="w-4 h-4 mr-1" />
-                            {job.views} views
-                          </span>
-                          <span className="flex items-center">
-                            <Users className="w-4 h-4 mr-1" />
-                            {job.applications} applications
-                          </span>
-                          <span className="flex items-center">
-                            <Calendar className="w-4 h-4 mr-1" />
-                            Posted {new Date(job.posted).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          job.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {job.status}
-                        </span>
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          className="p-2 text-gray-400 hover:text-blue-600"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          className="p-2 text-gray-400 hover:text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        );
 
       case 'applications':
         return (
-          <div className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                  <FileText className="w-6 h-6 mr-3 text-blue-600" />
-                  Internship Applications
-                </h2>
-                <div className="flex items-center space-x-3">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={loadApplications}
-                    disabled={loadingApplications}
-                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingApplications ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </motion.button>
-                </div>
-              </div>
-
-              {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    value={applicationFilters.status}
-                    onChange={(e) => setApplicationFilters(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="shortlisted">Shortlisted</option>
-                    <option value="accepted">Selected</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Internship</label>
-                  <select
-                    value={applicationFilters.internshipId}
-                    onChange={(e) => setApplicationFilters(prev => ({ ...prev, internshipId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">All Internships</option>
-                    {internships.map(internship => (
-                      <option key={internship._id} value={internship._id}>
-                        {internship.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                  <input
-                    type="text"
-                    value={applicationFilters.search}
-                    onChange={(e) => setApplicationFilters(prev => ({ ...prev, search: e.target.value }))}
-                    placeholder="Search by name or email..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              
-              {loadingApplications ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading applications...</p>
-                </div>
-              ) : applications.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Yet</h3>
-                  <p className="text-gray-600">Applications for your internships will appear here.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
-                  <table className="min-w-full text-sm divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr className="text-left text-gray-600">
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Candidate</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Internship</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Applied</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Experience</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {applications.map((application) => (
-                        <tr key={application._id} className="hover:bg-gray-50">
-                          <td className="px-6 py-3 whitespace-nowrap font-medium text-gray-900">{application.personalDetails?.fullName || 'N/A'}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{application.personalDetails?.emailAddress || 'N/A'}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-blue-600">{application.internshipDetails?.title || 'Internship'}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{new Date(application.createdAt).toLocaleDateString()}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-gray-600">{
-                            (application.workExperience?.totalYearsExperience ?? 0) <= 0
-                              ? 'Fresher'
-                              : `${application.workExperience.totalYearsExperience} yrs`
-                          }</td>
-                          <td className="px-6 py-3 whitespace-nowrap">
-                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                              application.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                              application.status === 'shortlisted' ? 'bg-blue-100 text-blue-800' :
-                              application.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                              application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {application.status || 'pending'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                                onClick={() => viewApplicationDetails(application._id)}
-                              >
-                                <Eye className="h-4 w-4" /> View
-                              </button>
-                              {application.status === 'pending' && (
-                                <>
-                                  <button
-                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                                    onClick={() => handleStatusUpdate(application._id, 'shortlisted')}
-                                  >
-                                    <CheckCircle className="h-4 w-4" /> Shortlist
-                                  </button>
-                                  <button
-                                    className="inline-flex items-center gap-1 text-red-600 hover:underline"
-                                    onClick={() => handleStatusUpdate(application._id, 'rejected')}
-                                  >
-                                    <X className="h-4 w-4" /> Reject
-                                  </button>
-                                </>
-                              )}
-                              {application.status === 'shortlisted' && (
-                                <>
-                                  <button
-                                    className="inline-flex items-center gap-1 text-green-600 hover:underline"
-                                    onClick={() => handleStatusUpdate(application._id, 'accepted')}
-                                  >
-                                    <Award className="h-4 w-4" /> Select
-                                  </button>
-                                  <button
-                                    className="inline-flex items-center gap-1 text-red-600 hover:underline"
-                                    onClick={() => handleStatusUpdate(application._id, 'rejected')}
-                                  >
-                                    <X className="h-4 w-4" /> Reject
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </motion.div>
-          </div>
+          <EmployerApplications
+            applications={applications}
+            loadingApplications={loadingApplications}
+            applicationFilters={applicationFilters}
+            setApplicationFilters={setApplicationFilters}
+            internships={internships}
+            loadApplications={loadApplications}
+            viewApplicationDetails={viewApplicationDetails}
+            handleStatusUpdate={handleStatusUpdate}
+            assignTest={assignTest}
+            resetTest={resetTest}
+            assigningTest={assigningTest}
+          />
         );
 
       case 'profile':
-        return (
-          <div className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8"
-            >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                <Building className="w-6 h-6 mr-3 text-blue-600" />
-                Company Profile
-              </h2>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                    <input 
-                      type="text" 
-                      value={user?.name || ''}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 bg-gray-50"
-                      readOnly
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <input 
-                      type="email" 
-                      value={user?.email || ''}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 bg-gray-50"
-                      readOnly
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Website</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://yourcompany.com"
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Size</label>
-                    <select className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                      <option>1-10 employees</option>
-                      <option>11-50 employees</option>
-                      <option>51-200 employees</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Description</label>
-                    <textarea 
-                      rows="6"
-                      placeholder="Tell candidates about your company, culture, and mission..."
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    ></textarea>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                    <input 
-                      type="text" 
-                      placeholder="San Francisco, CA"
-                      className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                      <Building className="mx-auto h-12 w-12 text-gray-400" />
-                      <p className="mt-2 text-sm text-gray-600">Upload your company logo</p>
-                      <input type="file" className="hidden" accept="image/*" />
-                      <button className="mt-2 text-blue-600 hover:text-blue-500">Choose file</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-8 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                >
-                  <CheckCircle className="w-5 h-5 inline mr-2" />
-                  Update Profile
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        );
+        return <EmployerCompanyProfile user={user} />;
 
       case 'mentor-requests':
-        const totalRequests = mentorRequests.length;
-        const pendingRequests = mentorRequests.filter(req => req.status === 'pending').length;
-        const approvedRequests = mentorRequests.filter(req => req.status === 'approved').length;
-        const rejectedRequests = mentorRequests.filter(req => req.status === 'rejected').length;
-
         return (
-          <div className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                  <UserCheck className="w-6 h-6 mr-3 text-indigo-600" />
-                  Mentor Requests
-                  <span className="ml-3 inline-flex items-center gap-2">
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700">{totalRequests} total</span>
-                    {pendingRequests > 0 && (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-800">{pendingRequests} pending</span>
-                    )}
-                  </span>
-                </h2>
-                <div className="flex items-center space-x-3">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={loadMentorRequests}
-                    disabled={loadingMentorRequests}
-                    className="bg-white text-gray-700 px-4 py-2 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 shadow-sm"
-                  >
-                    <RefreshCw className={`w-4 h-4 inline mr-2 ${loadingMentorRequests ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowMentorRequestForm(true)}
-                    className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Plus className="w-5 h-5" />
-                    <span>Submit Mentor Request</span>
-                  </motion.button>
-                </div>
-              </div>
-              
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <UserCheck className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-blue-900 mb-1">Request Employee as Mentor</h3>
-                    <p className="text-blue-700 text-sm">
-                      Submit a request to assign one of your employees as a mentor. The admin will review and approve the request.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-4 mb-6">
-                <div className="flex items-center space-x-2">
-                  <Filter className="w-4 h-4 text-gray-500" />
-                  <select
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    value={mentorRequestFilters.status}
-                    onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, status: e.target.value }))}
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Search by employee name or email..."
-                      className="border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm w-64 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-400"
-                      value={mentorRequestFilters.search}
-                      onChange={(e) => setMentorRequestFilters(prev => ({ ...prev, search: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-xl p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-indigo-100 text-sm font-medium">Total Requests</p>
-                      <p className="text-3xl font-bold">{totalRequests}</p>
-                    </div>
-                    <FileText className="w-8 h-8 text-indigo-200" />
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-xl p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-yellow-100 text-sm font-medium">Pending</p>
-                      <p className="text-3xl font-bold">{pendingRequests}</p>
-                    </div>
-                    <Clock className="w-8 h-8 text-yellow-200" />
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-green-100 text-sm font-medium">Approved</p>
-                      <p className="text-3xl font-bold">{approvedRequests}</p>
-                    </div>
-                    <CheckCircle className="w-8 h-8 text-green-200" />
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-red-100 text-sm font-medium">Rejected</p>
-                      <p className="text-3xl font-bold">{rejectedRequests}</p>
-                    </div>
-                    <X className="w-8 h-8 text-red-200" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Mentor Requests</h3>
-                {error && (
-                  <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{error}</div>
-                )}
-                {loadingMentorRequests ? (
-                  <div className="text-center py-10">
-                    <div className="inline-flex items-center space-x-2 text-gray-600">
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>Loading mentor requests...</span>
-                    </div>
-                  </div>
-                ) : mentorRequests.length === 0 ? (
-                  <div className="bg-gray-50 rounded-xl p-10 text-center border border-dashed border-gray-200">
-                    <UserCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-1 font-medium">No mentor requests submitted yet</p>
-                    <p className="text-gray-500 mb-4 text-sm">Create your first request to get started.</p>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowMentorRequestForm(true)}
-                      className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      Submit Your First Request
-                    </motion.button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
-                    <table className="min-w-full text-sm divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr className="text-left text-gray-600">
-                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Employee</th>
-                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Email</th>
-                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Experience</th>
-                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Status</th>
-                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Submitted</th>
-                          <th className="py-3 pr-4 font-semibold text-xs uppercase tracking-wide">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {mentorRequests.map(request => (
-                          <tr key={request._id} className="hover:bg-gray-50">
-                            <td className="py-3 pr-4 font-medium whitespace-nowrap">{request.employeeName}</td>
-                            <td className="py-3 pr-4 whitespace-nowrap">{request.employeeEmail}</td>
-                            <td className="py-3 pr-4 whitespace-nowrap">{request.yearsOfExperience}</td>
-                            <td className="py-3 pr-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                              </span>
-                            </td>
-                            <td className="py-3 pr-4 whitespace-nowrap">{new Date(request.createdAt).toLocaleDateString()}</td>
-                            <td className="py-3 pr-4 whitespace-nowrap">
-                              <button
-                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                                onClick={() => {
-                                  setSelectedMentorRequest(request);
-                                  setShowMentorRequestModal(true);
-                                }}
-                              >
-                                <Eye className="h-4 w-4" /> View
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
+          <EmployerMentorRequests
+            mentorRequests={mentorRequests}
+            loadingMentorRequests={loadingMentorRequests}
+            mentorRequestFilters={mentorRequestFilters}
+            setMentorRequestFilters={setMentorRequestFilters}
+            loadMentorRequests={loadMentorRequests}
+            setShowMentorRequestForm={setShowMentorRequestForm}
+          />
         );
 
       default:
-        return null;
+        return (
+          <EmployerDashboardOverview dashboardData={dashboardData} internshipCount={(internships || []).length} />
+        );
     }
   };
 
@@ -2104,6 +1344,23 @@ const EmployerDashboard = () => {
 
                 {/* Modal Body */}
                 <div className="px-6 py-4 space-y-3 text-sm text-gray-700">
+                  {/* Test Summary */}
+                  {(() => {
+                    const hasResult = typeof selectedApplication.score === 'number' || !!selectedApplication.result;
+                    if (!hasResult && selectedApplication.status !== 'test-assigned') return null;
+                    return (
+                      <div className="mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <p><span className="font-semibold">Test Attended:</span> {hasResult ? 'Yes' : 'Assigned'}</p>
+                        {hasResult && (
+                          <>
+                            <p><span className="font-semibold">Score:</span> {typeof selectedApplication.score === 'number' ? selectedApplication.score : '-'}</p>
+                            <p><span className="font-semibold">Result:</span> {selectedApplication.result || '-'}</p>
+                          </>
+                        )}
+                        <p><span className="font-semibold">Reason:</span> {selectedApplication.reason || (selectedApplication.result ? (selectedApplication.result === 'Failed' ? 'test failed' : 'test passed') : (selectedApplication.status === 'rejected' ? 'auto rejected' : '-'))}</p>
+                      </div>
+                    );
+                  })()}
                   <p>
                     <span className="font-semibold">Candidate:</span> {selectedApplication.personalDetails?.fullName || 'N/A'}
                   </p>
@@ -2226,7 +1483,7 @@ const EmployerDashboard = () => {
                         )}
                         {selectedApplication.status === 'shortlisted' && (
                           <motion.button whileHover={{ scale: 1.05 }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors" onClick={() => { handleStatusUpdate(selectedApplication._id, 'accepted'); }}>
-                            <Award className="w-4 h-4 inline mr-1" /> Select
+                            <Award className="w-4 h-4 inline mr-1" /> Accept
                           </motion.button>
                         )}
                         {(selectedApplication.status === 'pending' || selectedApplication.status === 'shortlisted') && (
@@ -3143,10 +2400,10 @@ const EmployerDashboard = () => {
                 onChange={(e) => setStatusUpdateData(prev => ({ ...prev, newStatus: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Select Status</option>
+                <option value="">Choose Status</option>
                 <option value="pending">Pending</option>
                 <option value="shortlisted">Shortlisted</option>
-                <option value="accepted">Selected</option>
+                <option value="accepted">Accepted</option>
                 <option value="rejected">Rejected</option>
               </select>
             </div>

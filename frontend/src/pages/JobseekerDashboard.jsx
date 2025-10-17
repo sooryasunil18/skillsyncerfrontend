@@ -48,7 +48,8 @@ import {
   Filter,
   ExternalLink,
   Heart,
-  Building
+  Building,
+  Trash
 } from 'lucide-react';
 
 const JobseekerDashboard = () => {
@@ -282,6 +283,7 @@ const JobseekerDashboard = () => {
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationDetails, setShowApplicationDetails] = useState(false);
+  const [statusMap, setStatusMap] = useState({});
 
   // Application form state
   const [showApplicationForm, setShowApplicationForm] = useState(false);
@@ -311,6 +313,14 @@ const JobseekerDashboard = () => {
         const payload = response?.data?.success ? response.data.data : response.data;
         const apps = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
         setApplications(apps);
+        // Also load statuses for test links and scores
+        try {
+          const statusRes = await jobseekerApi.getStatus();
+          const items = statusRes?.success ? (statusRes.data?.data || []) : [];
+          const map = {};
+          items.forEach(it => { map[it.applicationId] = it; });
+          setStatusMap(map);
+        } catch (_) {}
       } else {
         console.error('Failed to load applications:', response.data?.message || response.message);
         setApplications([]);
@@ -691,12 +701,14 @@ const JobseekerDashboard = () => {
                           <div className="flex items-center space-x-4 mt-2 text-sm">
                             <span className="flex items-center">
                               <Calendar className="w-4 h-4 mr-1" />
-                              Last date: {internship.lastDateToApply ? new Date(internship.lastDateToApply).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                              <span className={`${internship.isFinalDay ? 'text-red-600 font-semibold' : ''}`}>
+                                Last date: {internship.lastDateToApply ? new Date(internship.lastDateToApply).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                              </span>
                             </span>
                             {typeof internship.daysLeftToApply === 'number' && (
                               <span className={`flex items-center ${internship.daysLeftToApply <= 0 ? 'text-red-600' : 'text-gray-600'}`}>
                                 <Clock className="w-4 h-4 mr-1" />
-                                {internship.daysLeftToApply <= 0 ? 'Applications closed' : `${internship.daysLeftToApply} days left`}
+                                {internship.daysLeftToApply <= 0 ? 'Applications closed' : (internship.isFinalDay ? 'Last day to apply' : `${internship.daysLeftToApply} days left`)}
                               </span>
                             )}
                           </div>
@@ -725,11 +737,11 @@ const JobseekerDashboard = () => {
                           <motion.button
                             whileHover={{ scale: hasAppliedTo(internship._id) ? 1 : 1.02 }}
                             whileTap={{ scale: hasAppliedTo(internship._id) ? 1 : 0.98 }}
-                            onClick={() => !hasAppliedTo(internship._id) && handleApplyDetailed(internship)}
-                            disabled={hasAppliedTo(internship._id)}
-                            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${hasAppliedTo(internship._id) ? 'bg-red-100 text-red-700 border border-red-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                            onClick={() => !hasAppliedTo(internship._id) && internship.isAcceptingApplications && handleApplyDetailed(internship)}
+                            disabled={hasAppliedTo(internship._id) || !internship.isAcceptingApplications}
+                            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${hasAppliedTo(internship._id) || !internship.isAcceptingApplications ? 'bg-red-100 text-red-700 border border-red-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                           >
-                            {hasAppliedTo(internship._id) ? 'Applied' : 'Apply Now'}
+                            {hasAppliedTo(internship._id) ? 'Applied' : (internship.isAcceptingApplications ? 'Apply Now' : 'Closed')}
                           </motion.button>
                           <motion.button
                             whileHover={{ scale: 1.1 }}
@@ -867,28 +879,67 @@ const JobseekerDashboard = () => {
                               </p>
                             </div>
                           )}
+
+                          {/* Test assignment and result (only if an actual test exists) */}
+                          {(() => {
+                            const status = statusMap[application._id];
+                            if (!status) return null;
+                            const hasRealTest = !!status.testLink || typeof status.score === 'number' || (status.result !== null && status.result !== undefined) || status.status === 'test-assigned';
+                            if (!hasRealTest) return null; // do not show for auto-rejected applications without tests
+
+                            const testStatusText = status.status === 'test-assigned'
+                              ? 'Assigned'
+                              : (status.result || status.status || '—');
+
+                            return (
+                              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                <p className="text-sm text-blue-800">
+                                  <strong>Test Status:</strong> {testStatusText}
+                                </p>
+                                {status.testLink && (
+                                  <p className="text-sm mt-1">
+                                    <strong>Test Link:</strong> <a className="text-blue-600 hover:underline" href={status.testLink} target="_blank" rel="noreferrer">Open Test</a>
+                                  </p>
+                                )}
+                                {status.testExpiry && (
+                                  <p className="text-sm text-gray-700 mt-1">
+                                    <strong>Deadline:</strong> {new Date(status.testExpiry).toLocaleString()}
+                                  </p>
+                                )}
+                                {typeof status.score === 'number' && (
+                                  <p className="text-sm text-gray-700 mt-1">
+                                    <strong>Score:</strong> {status.score} ({status.result})
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex items-center space-x-3">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                             application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            application.status === 'shortlisted' ? 'bg-blue-100 text-blue-800' :
-                            application.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                            application.status === 'shortlisted' || application.status === 'test-assigned' ? 'bg-blue-100 text-blue-800' :
+                            application.status === 'accepted' || application.status === 'selected' ? 'bg-green-100 text-green-800' :
                             application.status === 'rejected' ? 'bg-red-100 text-red-800' :
                             'bg-red-100 text-red-800'
                           }`}>
-                            {application.status === 'accepted' ? 'Selected' :
+                            {application.status === 'accepted' || application.status === 'selected' ? 'Selected' :
                              application.status === 'shortlisted' ? 'Shortlisted' :
+                             application.status === 'test-assigned' ? 'Test Assigned' :
                              application.status === 'rejected' ? 'Rejected' :
                              application.status === 'pending' ? 'Pending' :
                              'Applied'}
                           </span>
                           <motion.button
                             type="button"
-                            whileHover={{ scale: 1.05 }}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                            title="View details"
+                            aria-label="View details"
                             onClick={() => { setSelectedApplication(application); setShowApplicationDetails(true); }}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                            className="p-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
                           >
-                            View Details
+                            <Eye className="w-4 h-4" />
                           </motion.button>
                         </div>
                       </div>
@@ -1882,7 +1933,7 @@ const JobseekerDashboard = () => {
                   <span className="flex items-center"><MapPin className="w-4 h-4 mr-1" />{selectedInternshipDetails.location}</span>
                   <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1" />{selectedInternshipDetails.mode}</span>
                   <span className="flex items-center"><Clock className="w-4 h-4 mr-1" />{selectedInternshipDetails.duration}</span>
-                  <span className="flex items-center"><Calendar className="w-4 h-4 mr-1" />Last date: {selectedInternshipDetails.lastDateToApply ? new Date(selectedInternshipDetails.lastDateToApply).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</span>
+                  <span className={`flex items-center ${selectedInternshipDetails.isFinalDay ? 'text-red-600 font-semibold' : ''}`}><Calendar className="w-4 h-4 mr-1" />Last date: {selectedInternshipDetails.lastDateToApply ? new Date(selectedInternshipDetails.lastDateToApply).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</span>
                 </div>
                 <div className="mt-4">
                   <h4 className="text-lg font-semibold text-gray-900">Description</h4>
@@ -1915,14 +1966,14 @@ const JobseekerDashboard = () => {
                     whileHover={{ scale: hasAppliedTo(selectedInternshipDetails._id) ? 1 : 1.02 }}
                     whileTap={{ scale: hasAppliedTo(selectedInternshipDetails._id) ? 1 : 0.98 }}
                     onClick={() => {
-                      if (!hasAppliedTo(selectedInternshipDetails._id)) {
+                      if (!hasAppliedTo(selectedInternshipDetails._id) && selectedInternshipDetails.isAcceptingApplications) {
                         handleApplyDetailed(selectedInternshipDetails);
                       }
                     }}
-                    disabled={hasAppliedTo(selectedInternshipDetails._id)}
-                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${hasAppliedTo(selectedInternshipDetails._id) ? 'bg-red-100 text-red-700 border border-red-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                    disabled={hasAppliedTo(selectedInternshipDetails._id) || !selectedInternshipDetails.isAcceptingApplications}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${hasAppliedTo(selectedInternshipDetails._id) || !selectedInternshipDetails.isAcceptingApplications ? 'bg-red-100 text-red-700 border border-red-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                   >
-                    {hasAppliedTo(selectedInternshipDetails._id) ? 'Applied' : 'Apply Now'}
+                    {hasAppliedTo(selectedInternshipDetails._id) ? 'Applied' : (selectedInternshipDetails.isAcceptingApplications ? 'Apply Now' : 'Closed')}
                   </motion.button>
                 </div>
               </div>

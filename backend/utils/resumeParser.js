@@ -118,7 +118,42 @@ const extractEntities = (text) => {
 
 module.exports = {
   extractText,
-  extractEntities
+  extractEntities,
+  /**
+   * Heuristic check to determine if extracted text likely represents a resume.
+   * Rules:
+   * - Minimum length
+   * - Contains contact info (email or phone)
+   * - Contains education keywords
+   * - Contains at least one of experience/internship/project sections
+   * - Prefer having a skills section or multiple tech keywords
+   */
+  isLikelyResume: (text) => {
+    const content = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!content || content.length < 300) return false;
+
+    const hasEmail = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(content);
+    const hasPhone = /(?:\+?\d[\s-]?){7,}\d/.test(content);
+    if (!(hasEmail || hasPhone)) return false;
+
+    const hasEducation = /(education|b\.??tech|m\.??tech|b\.??e\.?|bachelor|master|phd|mba|bca|mca|degree|university|college)/i.test(content);
+    if (!hasEducation) return false;
+
+    const hasExperience = /(experience|work\s*history|employment|internship|intern)/i.test(content);
+    const hasProjects = /(projects?|project\s*experience)/i.test(content);
+    if (!(hasExperience || hasProjects)) return false;
+
+    const hasSkillsSection = /(skills?\s*:|technical\s+skills|skills\s+summary)/i.test(content);
+    const techKeywords = /(java(script)?|typescript|python|react|node(\.js)?|express|mongodb|sql|html|css|aws|docker|kubernetes|git|linux|azure|gcp)/i;
+    const hasTech = techKeywords.test(content);
+    if (!(hasSkillsSection || hasTech)) return false;
+
+    // Reject if looks like a questionnaire or essay with no sections
+    const hasSections = /(summary|objective|education|experience|skills|projects|certifications|achievements)/i.test(content);
+    if (!hasSections) return false;
+
+    return true;
+  }
 };
 
 
